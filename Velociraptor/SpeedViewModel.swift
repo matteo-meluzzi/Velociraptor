@@ -4,7 +4,7 @@ import Foundation
 
 @MainActor
 final class SpeedViewModel: ObservableObject {
-    @Published var displaySpeed: String = "– –"
+    @Published var displaySpeed: String = "0.0"
     @Published var isLocationAvailable: Bool = false
 
     private let locationProvider: LocationProviding
@@ -19,13 +19,7 @@ final class SpeedViewModel: ObservableObject {
         locationProvider.speedPublisher
             .sink { [weak self] speed in
                 guard let self else { return }
-                if speed < 0 {
-                    self.displaySpeed = "– –"
-                    self.isLocationAvailable = false
-                } else {
-                    self.displaySpeed = String(format: "%.1f", speed * 3.6)
-                    self.isLocationAvailable = true
-                }
+                self.displaySpeed = String(format: "%.1f", (speed ?? 0) * 3.6)
             }
             .store(in: &cancellables)
 
@@ -34,7 +28,7 @@ final class SpeedViewModel: ObservableObject {
                 guard let self else { return }
                 switch status {
                 case .authorizedWhenInUse, .authorizedAlways:
-                    break
+                    self.isLocationAvailable = true
                 case .denied, .restricted:
                     self.isLocationAvailable = false
                 default:

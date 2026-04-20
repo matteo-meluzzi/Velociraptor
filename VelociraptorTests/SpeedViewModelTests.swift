@@ -4,28 +4,27 @@ import CoreLocation
 @testable import Velociraptor
 
 final class MockLocationProvider: LocationProviding {
-    private let speedSubject = CurrentValueSubject<Double, Never>(-1)
+    private let speedSubject = CurrentValueSubject<Double?, Never>(nil)
     private let authorizationSubject = CurrentValueSubject<CLAuthorizationStatus, Never>(.authorizedWhenInUse)
 
-    var speedPublisher: AnyPublisher<Double, Never> { speedSubject.eraseToAnyPublisher() }
+    var speedPublisher: AnyPublisher<Double?, Never> { speedSubject.eraseToAnyPublisher() }
     var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> { authorizationSubject.eraseToAnyPublisher() }
 
     func requestAuthorization() {}
     func startUpdatingLocation() {}
     func stopUpdatingLocation() {}
 
-    func send(speed: Double) { speedSubject.send(speed) }
+    func send(speed: Double?) { speedSubject.send(speed) }
     func send(status: CLAuthorizationStatus) { authorizationSubject.send(status) }
 }
 
 @MainActor
 struct SpeedViewModelTests {
-    @Test func unavailableSpeedShowsDashes() {
+    @Test func unavailableSpeedShowsZero() {
         let provider = MockLocationProvider()
         let vm = SpeedViewModel(locationProvider: provider)
-        provider.send(speed: -1)
-        #expect(vm.displaySpeed == "– –")
-        #expect(vm.isLocationAvailable == false)
+        provider.send(speed: nil)
+        #expect(vm.displaySpeed == "0.0")
     }
 
     @Test func lowSpeedFormatsCorrectly() {
@@ -33,7 +32,6 @@ struct SpeedViewModelTests {
         let vm = SpeedViewModel(locationProvider: provider)
         provider.send(speed: 3.2 / 3.6)
         #expect(vm.displaySpeed == "3.2")
-        #expect(vm.isLocationAvailable == true)
     }
 
     @Test func higherSpeedFormatsCorrectly() {
@@ -41,6 +39,18 @@ struct SpeedViewModelTests {
         let vm = SpeedViewModel(locationProvider: provider)
         provider.send(speed: 87.4 / 3.6)
         #expect(vm.displaySpeed == "87.4")
+    }
+
+    @Test func deniedAuthHidesLocation() {
+        let provider = MockLocationProvider()
+        let vm = SpeedViewModel(locationProvider: provider)
+        provider.send(status: .denied)
+        #expect(vm.isLocationAvailable == false)
+    }
+
+    @Test func authorizedAuthShowsLocation() {
+        let provider = MockLocationProvider()
+        let vm = SpeedViewModel(locationProvider: provider)
         #expect(vm.isLocationAvailable == true)
     }
 }

@@ -3,10 +3,10 @@ import CoreLocation
 
 final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProviding {
     private let manager = CLLocationManager()
-    private let speedSubject = CurrentValueSubject<Double, Never>(-1)
+    private let speedSubject = CurrentValueSubject<Double?, Never>(nil)
     private let authorizationSubject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
-    var speedPublisher: AnyPublisher<Double, Never> {
+    var speedPublisher: AnyPublisher<Double?, Never> {
         speedSubject.eraseToAnyPublisher()
     }
 
@@ -36,7 +36,8 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        speedSubject.send(locations.last?.speed ?? -1)
+        let speed = locations.last?.speed
+        speedSubject.send(speed.flatMap { $0 >= 0 ? $0 : nil })
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -48,6 +49,6 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        speedSubject.send(-1)
+        speedSubject.send(nil)
     }
 }
