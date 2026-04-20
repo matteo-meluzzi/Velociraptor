@@ -52,17 +52,17 @@ specs/001-gps-speed-display/
 Velociraptor/
 ├── VelociraptorApp.swift         # @main entry point (exists)
 ├── ContentView.swift             # Root view — delegates to SpeedView (exists, to be replaced)
-├── SpeedView.swift               # Primary UI: large speed readout + unit label
+├── SpeedView.swift               # Primary UI: large km/h speed readout
 ├── SpeedViewModel.swift          # ObservableObject — owns LocationManager, publishes speed
 └── LocationManager.swift         # NSObject + CLLocationManagerDelegate wrapper
 
 VelociraptorTests/
 ├── VelociraptorTests.swift       # Existing placeholder
-└── SpeedViewModelTests.swift     # Unit tests for speed conversion + state transitions
+└── SpeedViewModelTests.swift     # Unit tests for km/h display formatting
 
 VelociraptorUITests/
 ├── VelociraptorUITests.swift     # Existing placeholder
-└── SpeedDisplayUITests.swift     # UI test: speed label visible, unit toggle works
+└── SpeedDisplayUITests.swift     # UI test: speed label visible
 ```
 
 **Structure Decision**: Single flat group inside the existing Xcode project. No sub-folders — the file count is small enough that grouping by type adds no value.

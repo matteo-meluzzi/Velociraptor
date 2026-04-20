@@ -10,7 +10,7 @@
 - `CLLocationUpdate` (new iOS 17 async/await API via `CLLocationUpdate.liveUpdates()`) — more modern but adds complexity with structured concurrency in an otherwise simple delegate flow. Not worth the overhead for a single-screen app. Could migrate later.
 
 **Key facts**:
-- Speed unit: metres per second (m/s). Convert to km/h × 3.6, mph × 2.23694.
+- Speed unit: metres per second (m/s). Display in km/h only (× 3.6).
 - `speedAccuracy` (m/s): negative means invalid. Always check `speed >= 0` before displaying.
 - `CLLocationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation` gives the best GPS fix for speed.
 - `CLLocationManager.activityType = .automotiveNavigation` optimises power for vehicle-speed scenarios.
@@ -37,11 +37,11 @@
 
 ## 4. Unit conversion & display
 
-**Decision**: `SpeedViewModel` owns unit selection (`km/h` default, toggle to `mph`) and converts raw m/s → display string.
+**Decision**: `SpeedViewModel` converts raw m/s → km/h (× 3.6) and formats as a display string. km/h is the only unit.
 
-**Rationale**: Keeps LocationManager pure (always m/s) and testable. ViewModel converts and formats.
+**Rationale**: Keeps LocationManager pure (always m/s) and testable. A single unit removes toggle complexity.
 
-**Display precision**: 0 decimal places for ≥ 10 km/h, 1 decimal place below 10 km/h (e.g. "3.2 km/h"). Shows "– –" when speed < 0 (GPS unavailable).
+**Display precision**: Always 1 decimal place (e.g. "87.4", "3.2"). Shows "– –" when speed < 0 (GPS unavailable).
 
 ## 5. UI-first sequencing
 
@@ -63,7 +63,7 @@
 
 | Item | Resolution |
 |------|-----------|
-| Speed unit default | km/h (European user, inferred from locale; toggle to mph available) |
+| Speed unit | km/h only — mph removed |
 | Accuracy display | No — speed only, no accuracy indicator in V1 |
 | Background updates | No — WhenInUse only |
 | Map or route | No — speed display only, no map in V1 |

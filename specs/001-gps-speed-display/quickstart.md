@@ -22,8 +22,8 @@ The feature is built in two phases — UI first, GPS second.
 ### Phase A: Static UI (no GPS)
 
 1. Replace `ContentView.swift` with a pass-through to `SpeedView`.
-2. Create `SpeedView.swift` — large speed number, unit label, unit toggle button.
-3. Drive with hardcoded `@State var speed: Double = 42.0`.
+2. Create `SpeedView.swift` — large speed number, static `"km/h"` label.
+3. Drive with hardcoded `@State var speed: Double = 42.0` (converts to km/h inline).
 4. Verify in Xcode Previews and simulator (no location needed).
 
 ### Phase B: GPS integration
@@ -54,5 +54,5 @@ Example GPX snippet for ~50 km/h:
 
 ## Testing
 
-- **Unit tests** (`SpeedViewModelTests`): test `SpeedUnit.convert`, display string formatting, "– –" for unavailable speed.
-- **UI tests** (`SpeedDisplayUITests`): verify speed label is visible, unit toggle button exists and switches label.
+- **Unit tests** (`SpeedViewModelTests`): test km/h display string formatting, "– –" for unavailable speed.
+- **UI tests** (`SpeedDisplayUITests`): verify speed label and "km/h" label are visible.

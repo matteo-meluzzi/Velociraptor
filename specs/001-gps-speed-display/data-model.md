@@ -2,34 +2,12 @@
 
 ## Entities
 
-### SpeedUnit (enum)
-
-```swift
-enum SpeedUnit: String, CaseIterable {
-    case kmh = "km/h"
-    case mph = "mph"
-
-    func convert(from metersPerSecond: Double) -> Double {
-        switch self {
-        case .kmh: return metersPerSecond * 3.6
-        case .mph: return metersPerSecond * 2.23694
-        }
-    }
-}
-```
-
-**Fields**: raw string label used directly in the UI.  
-**Relationships**: consumed by `SpeedViewModel`.
-
----
-
 ### SpeedViewModel (ObservableObject)
 
 ```swift
 @MainActor
 final class SpeedViewModel: ObservableObject {
     @Published var displaySpeed: String      // e.g. "87" or "3.2" or "– –"
-    @Published var unit: SpeedUnit = .kmh
     @Published var isLocationAvailable: Bool // false when GPS not locked
 
     private let locationProvider: LocationProviding
@@ -37,9 +15,9 @@ final class SpeedViewModel: ObservableObject {
 ```
 
 **Responsibilities**:
-- Subscribes to `LocationProviding.speedPublisher`.
-- Converts raw m/s → display string using `SpeedUnit.convert(from:)`.
-- Formats: 0 decimal places if converted ≥ 10, 1 decimal place if < 10, "– –" if raw speed < 0.
+- Subscribes to `LocationProviding.speedPublisher` (m/s).
+- Converts raw m/s → km/h (× 3.6) → display string.
+- Formats: always 1 decimal place (e.g. "87.4", "3.2"), "– –" if raw speed < 0.
 
 **State transitions**:
 
@@ -51,7 +29,7 @@ final class SpeedViewModel: ObservableObject {
 
 ---
 
-### LocationManager (NSObject, CLLocationManagerDelegate, ObservableObject)
+### LocationManager (NSObject, CLLocationManagerDelegate, LocationProviding)
 
 ```swift
 final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProviding {
@@ -89,7 +67,6 @@ protocol LocationProviding: AnyObject {
 | Field | Rule |
 |-------|------|
 | `rawSpeed` | Display "– –" when `rawSpeed < 0` |
-| `unit` | Must be a valid `SpeedUnit` case; default `.kmh` |
 | `displaySpeed` | Always a non-empty string; never `nil` |
 
 ## State Transitions (authorization)
