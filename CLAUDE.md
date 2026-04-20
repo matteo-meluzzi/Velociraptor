@@ -33,4 +33,5 @@ Note: unit tests use the newer Swift Testing framework (not XCTest), so test fun
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
+at `specs/001-gps-speed-display/plan.md`.
 <!-- SPECKIT END -->
