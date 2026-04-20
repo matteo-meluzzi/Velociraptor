@@ -31,13 +31,13 @@
 
 **Independent Test**: Run on simulator with GPX location file → speed number updates in real time → remove location simulation → display shows `"– –"`.
 
-- [ ] T003 [US2] Add `NSLocationWhenInUseUsageDescription` key with usage description string to `Velociraptor/Info.plist`
-- [ ] T004 [US2] Create `Velociraptor/LocationProviding.swift` — `LocationProviding` protocol with `speedPublisher: AnyPublisher<Double, Never>`, `authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never>`, `requestAuthorization()`, `startUpdatingLocation()`, `stopUpdatingLocation()`
-- [ ] T005 [US2] Create `Velociraptor/LocationManager.swift` — `NSObject` subclass conforming to `CLLocationManagerDelegate` and `LocationProviding`; sets `desiredAccuracy = .bestForNavigation` and `activityType = .automotiveNavigation`; calls `requestWhenInUseAuthorization()` on init; publishes `rawSpeed` (Double, m/s) on each `didUpdateLocations` callback; handles `.denied` and `.restricted` authorization states
-- [ ] T006 [US2] Create `Velociraptor/SpeedViewModel.swift` — `@MainActor final class` conforming to `ObservableObject`; injected `LocationProviding`; `@Published var displaySpeed: String` (km/h: always 1 decimal place, e.g. `"87.4"`, `"– –"` when speed < 0); `@Published var isLocationAvailable: Bool`
-- [ ] T007 [US2] Update `Velociraptor/SpeedView.swift` to accept `@ObservedObject var viewModel: SpeedViewModel`; bind speed display to `viewModel.displaySpeed`; show `"Location unavailable"` message when `!viewModel.isLocationAvailable`
-- [ ] T008 [US2] Update `Velociraptor/ContentView.swift` to create `@StateObject var viewModel = SpeedViewModel(locationProvider: LocationManager())` and pass it to `SpeedView(viewModel: viewModel)`
-- [ ] T009 [P] [US2] Add `@Test` cases for `SpeedViewModel` display formatting in `VelociraptorTests/SpeedViewModelTests.swift` — use `MockLocationProvider` injected via `LocationProviding`; cover: `"– –"` for `speed = -1`, `"3.2"` for low speed, `"87.4"` for higher speed
+- [X] T003 [US2] Add `NSLocationWhenInUseUsageDescription` key with usage description string to `Velociraptor/Info.plist`
+- [X] T004 [US2] Create `Velociraptor/LocationProviding.swift` — `LocationProviding` protocol with `speedPublisher: AnyPublisher<Double, Never>`, `authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never>`, `requestAuthorization()`, `startUpdatingLocation()`, `stopUpdatingLocation()`
+- [X] T005 [US2] Create `Velociraptor/LocationManager.swift` — `NSObject` subclass conforming to `CLLocationManagerDelegate` and `LocationProviding`; sets `desiredAccuracy = .bestForNavigation` and `activityType = .automotiveNavigation`; calls `requestWhenInUseAuthorization()` on init; publishes `rawSpeed` (Double, m/s) on each `didUpdateLocations` callback; handles `.denied` and `.restricted` authorization states
+- [X] T006 [US2] Create `Velociraptor/SpeedViewModel.swift` — `@MainActor final class` conforming to `ObservableObject`; injected `LocationProviding`; `@Published var displaySpeed: String` (km/h: always 1 decimal place, e.g. `"87.4"`, `"– –"` when speed < 0); `@Published var isLocationAvailable: Bool`
+- [X] T007 [US2] Update `Velociraptor/SpeedView.swift` to accept `@ObservedObject var viewModel: SpeedViewModel`; bind speed display to `viewModel.displaySpeed`; show `"Location unavailable"` message when `!viewModel.isLocationAvailable`
+- [X] T008 [US2] Update `Velociraptor/ContentView.swift` to create `@StateObject var viewModel = SpeedViewModel(locationProvider: LocationManager())` and pass it to `SpeedView(viewModel: viewModel)`
+- [X] T009 [P] [US2] Add `@Test` cases for `SpeedViewModel` display formatting in `VelociraptorTests/SpeedViewModelTests.swift` — use `MockLocationProvider` injected via `LocationProviding`; cover: `"– –"` for `speed = -1`, `"3.2"` for low speed, `"87.4"` for higher speed
 
 **Checkpoint**: App requests location permission on first launch; speed updates live in km/h; `"– –"` shown when GPS unavailable; all tests pass.
 
@@ -47,7 +47,7 @@
 
 **Purpose**: Final validation.
 
-- [ ] T010 Run full build and test suite: `xcodebuild build -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'` then `xcodebuild test -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [X] T010 Run full build and test suite: `xcodebuild build -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'` then `xcodebuild test -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'`
 
 ---
 
