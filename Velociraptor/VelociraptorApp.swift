@@ -7,8 +7,7 @@ struct VelociraptorApp: App {
     @StateObject private var locationStatusViewModel: LocationStatusViewModel
 
     init() {
-        let authPublisher = AuthorizationStatusPublisher()
-        _locationStatusViewModel = StateObject(wrappedValue: LocationStatusViewModel(authorizationPublisher: authPublisher.authorizationStatusPublisher))
+        _locationStatusViewModel = StateObject(wrappedValue: LocationStatusViewModel(AuthorizationStatusPublisher()))
         _speedViewModel = StateObject(wrappedValue: SpeedViewModel(locationProvider: LocationPublisher(behavior: SpeedBehavior())))
         _altitudeViewModel = StateObject(wrappedValue: AltitudeViewModel(locationProvider: LocationPublisher(behavior: AltitudeBehavior())))
     }

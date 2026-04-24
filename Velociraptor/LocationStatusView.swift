@@ -6,7 +6,13 @@ import SwiftUI
 final class LocationStatusViewModel: ObservableObject {
     @Published var isAvailable: Bool = false
 
+    private var retained: AuthorizationStatusPublisher?
     private var cancellable: AnyCancellable?
+
+    convenience init(_ authPublisher: AuthorizationStatusPublisher) {
+        self.init(authorizationPublisher: authPublisher.authorizationStatusPublisher)
+        self.retained = authPublisher
+    }
 
     init(authorizationPublisher: AnyPublisher<CLAuthorizationStatus, Never>) {
         cancellable = authorizationPublisher
