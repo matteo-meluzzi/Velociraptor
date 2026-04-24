@@ -1,7 +1,7 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 0.0.0 → 1.0.0
+Version change: 0.0.0 → 1.1.0
 Added sections:
   - I. Build Integrity (new)
   - II. Test Discipline (new)
@@ -71,6 +71,21 @@ before closing a task prevents incomplete or incorrect work from silently accumu
 **Gate**: The review step is the final step of every task. No task transitions to
 "completed" without a reviewer agent approval on the associated diff.
 
+### VI. Plan Review Gate
+
+Every implementation plan (`plan.md`) MUST be reviewed by a dedicated reviewer agent before
+any implementation work begins. The reviewer's explicit **APPROVED** verdict is a hard
+prerequisite for proceeding to `/speckit-tasks` or any coding task.
+
+**Rationale**: A plan encodes architectural decisions, data flow, and task scope that are
+far cheaper to correct before code is written. A reviewer agent provides an independent
+check for gaps, missing edge cases, and constitution violations that the author may overlook.
+
+**Gate**: After `/speckit-plan` completes, spawn a reviewer agent with the full plan and
+supporting artifacts (`spec.md`, `research.md`, `data-model.md`). Wait for an explicit
+**APPROVED** verdict. Address all **BLOCKED** issues and re-run the reviewer until approval
+is granted. Only then proceed to implementation.
+
 ### V. SwiftUI-First
 
 The app MUST be built exclusively with SwiftUI. UIKit and AppKit integrations are
@@ -90,6 +105,10 @@ Every code change MUST pass the following gates **in order** before a git commit
 
 Skipping or reordering these gates is a constitution violation and the commit MUST NOT
 proceed.
+
+Before implementation work begins, the following planning gate MUST also be satisfied:
+
+4. A reviewer agent reviews `plan.md` (with `spec.md`, `research.md`, `data-model.md`) and returns an explicit **APPROVED** verdict (Principle VI).
 
 ## Development Workflow
 
@@ -121,4 +140,4 @@ on every change.
 Check section verifying that the planned approach does not violate any principle before
 work begins.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-04-20
+**Version**: 1.1.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-04-24
