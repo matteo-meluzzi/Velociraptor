@@ -3,25 +3,16 @@ import SwiftUI
 
 @MainActor
 final class AltitudeViewModel: ObservableObject {
-    @Published var displayAltitude: String = "– m"
+    @Published var displayAltitude: String = "–"
 
     private let locationProvider: any LocationProviding<Double?>
     private var cancellables = Set<AnyCancellable>()
 
     init(locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
-        bindPublishers()
-    }
-
-    private func bindPublishers() {
         locationProvider.valuePublisher
             .sink { [weak self] altitude in
-                guard let self else { return }
-                if let altitude {
-                    self.displayAltitude = "\(Int(altitude.rounded())) m"
-                } else {
-                    self.displayAltitude = "– m"
-                }
+                self?.displayAltitude = altitude.map { "\(Int($0.rounded()))" } ?? "–"
             }
             .store(in: &cancellables)
     }
@@ -31,9 +22,14 @@ struct AltitudeView: View {
     @ObservedObject var viewModel: AltitudeViewModel
 
     var body: some View {
-        Text(viewModel.displayAltitude)
-            .font(.title2)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
+        HStack(alignment: .lastTextBaseline, spacing: 4) {
+            Text(viewModel.displayAltitude)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Text("m")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
     }
 }

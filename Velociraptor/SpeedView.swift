@@ -22,11 +22,10 @@ struct SpeedView: View {
     @ObservedObject var viewModel: SpeedViewModel
 
     var body: some View {
-        VStack(spacing: 8) {
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
             Text(viewModel.displaySpeed)
                 .font(.system(size: 120, weight: .thin, design: .rounded))
                 .monospacedDigit()
-
             Text("km/h")
                 .font(.title2)
                 .foregroundStyle(.secondary)
