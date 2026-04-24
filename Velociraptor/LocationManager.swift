@@ -4,7 +4,6 @@ import CoreLocation
 protocol LocationProviding<Value>: AnyObject {
     associatedtype Value
     var valuePublisher: AnyPublisher<Value, Never> { get }
-    var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> { get }
     func requestAuthorization()
     func startUpdatingLocation()
     func stopUpdatingLocation()
@@ -31,26 +30,20 @@ struct AltitudeBehavior: LocationBehavior {
     }
 }
 
-final class LocationManager<Behavior: LocationBehavior>: NSObject, CLLocationManagerDelegate, LocationProviding {
+final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationManagerDelegate, LocationProviding {
     typealias Value = Behavior.Value
 
     private let clManager = CLLocationManager()
     private let behavior: Behavior
     private let valueSubject: CurrentValueSubject<Behavior.Value, Never>
-    private let authorizationSubject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
     var valuePublisher: AnyPublisher<Behavior.Value, Never> {
         valueSubject.eraseToAnyPublisher()
     }
 
-    var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
-        authorizationSubject.eraseToAnyPublisher()
-    }
-
     init(behavior: Behavior) {
         self.behavior = behavior
         valueSubject = CurrentValueSubject(behavior.initialValue)
-        authorizationSubject = CurrentValueSubject(clManager.authorizationStatus)
         super.init()
         clManager.delegate = self
         clManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -77,7 +70,6 @@ final class LocationManager<Behavior: LocationBehavior>: NSObject, CLLocationMan
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = clManager.authorizationStatus
-        authorizationSubject.send(status)
         if status == .authorizedWhenInUse || status == .authorizedAlways {
             startUpdatingLocation()
         }
@@ -85,5 +77,25 @@ final class LocationManager<Behavior: LocationBehavior>: NSObject, CLLocationMan
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         valueSubject.send(behavior.initialValue)
+    }
+}
+
+final class AuthorizationStatusPublisher: NSObject, CLLocationManagerDelegate {
+    private let clManager = CLLocationManager()
+    private let subject: CurrentValueSubject<CLAuthorizationStatus, Never>
+
+    var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
+        subject.eraseToAnyPublisher()
+    }
+
+    override init() {
+        subject = CurrentValueSubject(clManager.authorizationStatus)
+        super.init()
+        clManager.delegate = self
+        clManager.requestWhenInUseAuthorization()
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        subject.send(clManager.authorizationStatus)
     }
 }
