@@ -4,20 +4,17 @@ import CoreLocation
 @testable import Velociraptor
 
 final class MockLocationProvider: LocationProviding {
-    private let speedSubject = CurrentValueSubject<Double?, Never>(nil)
-    private let altitudeSubject = CurrentValueSubject<Double?, Never>(nil)
+    private let valueSubject = CurrentValueSubject<Double?, Never>(nil)
     private let authorizationSubject = CurrentValueSubject<CLAuthorizationStatus, Never>(.authorizedWhenInUse)
 
-    var speedPublisher: AnyPublisher<Double?, Never> { speedSubject.eraseToAnyPublisher() }
-    var altitudePublisher: AnyPublisher<Double?, Never> { altitudeSubject.eraseToAnyPublisher() }
+    var valuePublisher: AnyPublisher<Double?, Never> { valueSubject.eraseToAnyPublisher() }
     var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> { authorizationSubject.eraseToAnyPublisher() }
 
     func requestAuthorization() {}
     func startUpdatingLocation() {}
     func stopUpdatingLocation() {}
 
-    func send(speed: Double?) { speedSubject.send(speed) }
-    func send(altitude: Double?) { altitudeSubject.send(altitude) }
+    func send(value: Double?) { valueSubject.send(value) }
     func send(status: CLAuthorizationStatus) { authorizationSubject.send(status) }
 }
 
@@ -26,21 +23,21 @@ struct SpeedViewModelTests {
     @Test func unavailableSpeedShowsZero() {
         let provider = MockLocationProvider()
         let vm = SpeedViewModel(locationProvider: provider)
-        provider.send(speed: nil)
+        provider.send(value: nil)
         #expect(vm.displaySpeed == "0.0")
     }
 
     @Test func lowSpeedFormatsCorrectly() {
         let provider = MockLocationProvider()
         let vm = SpeedViewModel(locationProvider: provider)
-        provider.send(speed: 3.2 / 3.6)
+        provider.send(value: 3.2 / 3.6)
         #expect(vm.displaySpeed == "3.2")
     }
 
     @Test func higherSpeedFormatsCorrectly() {
         let provider = MockLocationProvider()
         let vm = SpeedViewModel(locationProvider: provider)
-        provider.send(speed: 87.4 / 3.6)
+        provider.send(value: 87.4 / 3.6)
         #expect(vm.displaySpeed == "87.4")
     }
 

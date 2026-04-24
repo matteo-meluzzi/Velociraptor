@@ -14,7 +14,7 @@ final class AltitudeViewModel: ObservableObject {
     }
 
     private func bindPublishers() {
-        locationProvider.altitudePublisher
+        locationProvider.valuePublisher
             .sink { [weak self] altitude in
                 guard let self else { return }
                 if let altitude {

@@ -6,9 +6,8 @@ struct VelociraptorApp: App {
     @StateObject private var altitudeViewModel: AltitudeViewModel
 
     init() {
-        let manager = LocationManager()
-        _speedViewModel = StateObject(wrappedValue: SpeedViewModel(locationProvider: manager))
-        _altitudeViewModel = StateObject(wrappedValue: AltitudeViewModel(locationProvider: manager))
+        _speedViewModel = StateObject(wrappedValue: SpeedViewModel(locationProvider: LocationManager(behavior: SpeedBehavior())))
+        _altitudeViewModel = StateObject(wrappedValue: AltitudeViewModel(locationProvider: LocationManager(behavior: AltitudeBehavior())))
     }
 
     var body: some Scene {

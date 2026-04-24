@@ -1,25 +1,39 @@
 import Combine
 import CoreLocation
 
+protocol LocationBehavior {
+    func value(from location: CLLocation) -> Double?
+}
+
+struct SpeedBehavior: LocationBehavior {
+    func value(from location: CLLocation) -> Double? {
+        let speed = location.speed
+        return speed >= 0 ? speed : nil
+    }
+}
+
+struct AltitudeBehavior: LocationBehavior {
+    func value(from location: CLLocation) -> Double? {
+        location.altitude
+    }
+}
+
 final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProviding {
     private let manager = CLLocationManager()
-    private let speedSubject = CurrentValueSubject<Double?, Never>(nil)
-    private let altitudeSubject = CurrentValueSubject<Double?, Never>(nil)
+    private let behavior: any LocationBehavior
+    private let valueSubject = CurrentValueSubject<Double?, Never>(nil)
     private let authorizationSubject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
-    var speedPublisher: AnyPublisher<Double?, Never> {
-        speedSubject.eraseToAnyPublisher()
-    }
-
-    var altitudePublisher: AnyPublisher<Double?, Never> {
-        altitudeSubject.eraseToAnyPublisher()
+    var valuePublisher: AnyPublisher<Double?, Never> {
+        valueSubject.eraseToAnyPublisher()
     }
 
     var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
         authorizationSubject.eraseToAnyPublisher()
     }
 
-    override init() {
+    init(behavior: any LocationBehavior) {
+        self.behavior = behavior
         authorizationSubject = CurrentValueSubject(manager.authorizationStatus)
         super.init()
         manager.delegate = self
@@ -41,9 +55,8 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        let speed = locations.last?.speed
-        speedSubject.send(speed.flatMap { $0 >= 0 ? $0 : nil })
-        altitudeSubject.send(locations.last?.altitude)
+        guard let location = locations.last else { return }
+        valueSubject.send(behavior.value(from: location))
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -55,7 +68,6 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        speedSubject.send(nil)
-        altitudeSubject.send(nil)
+        valueSubject.send(nil)
     }
 }

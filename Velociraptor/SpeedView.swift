@@ -15,7 +15,7 @@ final class SpeedViewModel: ObservableObject {
     }
 
     private func bindPublishers() {
-        locationProvider.speedPublisher
+        locationProvider.valuePublisher
             .sink { [weak self] speed in
                 guard let self else { return }
                 self.displaySpeed = String(format: "%.1f", (speed ?? 0) * 3.6)
