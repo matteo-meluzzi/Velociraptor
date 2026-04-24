@@ -3,31 +3,46 @@ import Combine
 import CoreLocation
 @testable import Velociraptor
 
+final class MockAuthorizationStatusPublisher: AuthorizationStatusPublisher {
+    private let subject: CurrentValueSubject<CLAuthorizationStatus, Never>
+
+    override var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
+        subject.eraseToAnyPublisher()
+    }
+
+    init(status: CLAuthorizationStatus) {
+        subject = CurrentValueSubject(status)
+        super.init()
+    }
+
+    func send(_ status: CLAuthorizationStatus) { subject.send(status) }
+}
+
 @MainActor
 struct LocationStatusViewModelTests {
     @Test func deniedAuthMarksUnavailable() {
-        let subject = CurrentValueSubject<CLAuthorizationStatus, Never>(.denied)
-        let vm = LocationStatusViewModel(authorizationPublisher: subject.eraseToAnyPublisher())
+        let publisher = MockAuthorizationStatusPublisher(status: .denied)
+        let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == false)
     }
 
     @Test func authorizedWhenInUseMarksAvailable() {
-        let subject = CurrentValueSubject<CLAuthorizationStatus, Never>(.authorizedWhenInUse)
-        let vm = LocationStatusViewModel(authorizationPublisher: subject.eraseToAnyPublisher())
+        let publisher = MockAuthorizationStatusPublisher(status: .authorizedWhenInUse)
+        let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == true)
     }
 
     @Test func authorizedAlwaysMarksAvailable() {
-        let subject = CurrentValueSubject<CLAuthorizationStatus, Never>(.authorizedAlways)
-        let vm = LocationStatusViewModel(authorizationPublisher: subject.eraseToAnyPublisher())
+        let publisher = MockAuthorizationStatusPublisher(status: .authorizedAlways)
+        let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == true)
     }
 
     @Test func transitionFromDeniedToAuthorized() {
-        let subject = CurrentValueSubject<CLAuthorizationStatus, Never>(.denied)
-        let vm = LocationStatusViewModel(authorizationPublisher: subject.eraseToAnyPublisher())
+        let publisher = MockAuthorizationStatusPublisher(status: .denied)
+        let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == false)
-        subject.send(.authorizedWhenInUse)
+        publisher.send(.authorizedWhenInUse)
         #expect(vm.isAvailable == true)
     }
 }
