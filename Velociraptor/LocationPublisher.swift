@@ -73,7 +73,11 @@ final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationM
     }
 }
 
-class AuthorizationStatusPublisher: NSObject, CLLocationManagerDelegate {
+protocol AuthorizationProviding: AnyObject {
+    var publisher: AnyPublisher<CLAuthorizationStatus, Never> { get }
+}
+
+final class AuthorizationStatusPublisher: NSObject, CLLocationManagerDelegate, AuthorizationProviding {
     private let clManager = CLLocationManager()
     private let subject: CurrentValueSubject<CLAuthorizationStatus, Never>
 

@@ -6,12 +6,12 @@ import SwiftUI
 final class LocationStatusViewModel: ObservableObject {
     @Published var isAvailable: Bool = false
 
-    private let authPublisher: AuthorizationStatusPublisher
+    private let authProvider: any AuthorizationProviding
     private var cancellable: AnyCancellable?
 
-    init(_ authPublisher: AuthorizationStatusPublisher) {
-        self.authPublisher = authPublisher
-        cancellable = authPublisher.publisher
+    init(_ authProvider: any AuthorizationProviding) {
+        self.authProvider = authProvider
+        cancellable = authProvider.publisher
             .sink { [weak self] status in
                 guard let self else { return }
                 switch status {

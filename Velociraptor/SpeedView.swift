@@ -6,15 +6,14 @@ final class SpeedViewModel: ObservableObject {
     @Published var displaySpeed: String = "0.0"
 
     private let locationProvider: any LocationProviding<Double?>
-    private var cancellables = Set<AnyCancellable>()
+    private var cancellable: AnyCancellable?
 
     init(locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
-        locationProvider.publisher
+        cancellable = locationProvider.publisher
             .sink { [weak self] speed in
                 self?.displaySpeed = String(format: "%.1f", (speed ?? 0) * 3.6)
             }
-            .store(in: &cancellables)
     }
 }
 

@@ -3,16 +3,15 @@ import Combine
 import CoreLocation
 @testable import Velociraptor
 
-final class MockAuthorizationStatusPublisher: AuthorizationStatusPublisher {
+final class MockAuthorizationProvider: AuthorizationProviding {
     private let subject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
-    override var publisher: AnyPublisher<CLAuthorizationStatus, Never> {
+    var publisher: AnyPublisher<CLAuthorizationStatus, Never> {
         subject.eraseToAnyPublisher()
     }
 
     init(status: CLAuthorizationStatus) {
         subject = CurrentValueSubject(status)
-        super.init()
     }
 
     func send(_ status: CLAuthorizationStatus) { subject.send(status) }
@@ -21,25 +20,25 @@ final class MockAuthorizationStatusPublisher: AuthorizationStatusPublisher {
 @MainActor
 struct LocationStatusViewModelTests {
     @Test func deniedAuthMarksUnavailable() {
-        let publisher = MockAuthorizationStatusPublisher(status: .denied)
+        let publisher = MockAuthorizationProvider(status: .denied)
         let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == false)
     }
 
     @Test func authorizedWhenInUseMarksAvailable() {
-        let publisher = MockAuthorizationStatusPublisher(status: .authorizedWhenInUse)
+        let publisher = MockAuthorizationProvider(status: .authorizedWhenInUse)
         let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == true)
     }
 
     @Test func authorizedAlwaysMarksAvailable() {
-        let publisher = MockAuthorizationStatusPublisher(status: .authorizedAlways)
+        let publisher = MockAuthorizationProvider(status: .authorizedAlways)
         let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == true)
     }
 
     @Test func transitionFromDeniedToAuthorized() {
-        let publisher = MockAuthorizationStatusPublisher(status: .denied)
+        let publisher = MockAuthorizationProvider(status: .denied)
         let vm = LocationStatusViewModel(publisher)
         #expect(vm.isAvailable == false)
         publisher.send(.authorizedWhenInUse)

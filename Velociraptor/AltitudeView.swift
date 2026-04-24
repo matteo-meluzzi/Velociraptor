@@ -6,15 +6,14 @@ final class AltitudeViewModel: ObservableObject {
     @Published var displayAltitude: String = "–"
 
     private let locationProvider: any LocationProviding<Double?>
-    private var cancellables = Set<AnyCancellable>()
+    private var cancellable: AnyCancellable?
 
     init(locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
-        locationProvider.publisher
+        cancellable = locationProvider.publisher
             .sink { [weak self] altitude in
                 self?.displayAltitude = altitude.map { "\(Int($0.rounded()))" } ?? "–"
             }
-            .store(in: &cancellables)
     }
 }
 
