@@ -3,11 +3,11 @@ import CoreLocation
 import Combine
 
 struct ContentView : View {
-    @ObservedObject var speedViewModel: SpeedViewModel
-    @ObservedObject var altitudeViewModel: AltitudeViewModel
-    @ObservedObject var altitudeChangeViewModel: AltitudeChangeViewModel
+    @ObservedObject var speedViewModel: OneValueModel
+    @ObservedObject var altitudeViewModel: OneValueModel
+    @ObservedObject var altitudeChangeViewModel: SamplesModel
     @ObservedObject var locationStatusViewModel: LocationStatusViewModel
-    @ObservedObject var accelerationViewModel: AccelerationViewModel
+    @ObservedObject var accelerationViewModel: FirstDerivativeSamplesModel
 
     var body: some View {
         VStack(spacing: 8) {
@@ -25,18 +25,18 @@ struct ContentView : View {
 
 @main
 struct VelociraptorApp: App {
-    @StateObject private var speedViewModel: SpeedViewModel
-    @StateObject private var altitudeViewModel: AltitudeViewModel
-    @StateObject private var altitudeChangeViewModel: AltitudeChangeViewModel
+    @StateObject private var speedViewModel: OneValueModel
+    @StateObject private var altitudeViewModel: OneValueModel
+    @StateObject private var altitudeChangeViewModel: SamplesModel
     @StateObject private var locationStatusViewModel: LocationStatusViewModel
-    @StateObject private var accelerationViewModel: AccelerationViewModel
+    @StateObject private var accelerationViewModel: FirstDerivativeSamplesModel
 
     init() {
-        _speedViewModel = StateObject(wrappedValue: SpeedViewModel(LocationPublisher(behavior: NilToZero(inner: SpeedBehavior()))))
-        _altitudeViewModel = StateObject(wrappedValue: AltitudeViewModel(LocationPublisher(behavior: AltitudeBehavior())))
-        _altitudeChangeViewModel = StateObject(wrappedValue: AltitudeChangeViewModel(LocationPublisher(behavior: Timestamped(inner: NilToZero(inner: AltitudeBehavior())))))
+        _speedViewModel = StateObject(wrappedValue: OneValueModel(LocationPublisher(behavior: MetersPerSecondToKmh(inner: NilToZero(inner: SpeedBehavior())))))
+        _altitudeViewModel = StateObject(wrappedValue: OneValueModel(LocationPublisher(behavior: NilToZero(inner: AltitudeBehavior()))))
+        _altitudeChangeViewModel = StateObject(wrappedValue: SamplesModel(LocationPublisher(behavior: Timestamped(inner: NilToZero(inner: AltitudeBehavior())))))
         _locationStatusViewModel = StateObject(wrappedValue: LocationStatusViewModel(AuthorizationStatusPublisher()))
-        _accelerationViewModel = StateObject(wrappedValue: AccelerationViewModel(LocationPublisher(behavior: Timestamped(inner: NilToZero(inner: SpeedBehavior())))))
+        _accelerationViewModel = StateObject(wrappedValue: FirstDerivativeSamplesModel(SamplesModel(LocationPublisher(behavior: Timestamped(inner: NilToZero(inner: SpeedBehavior()))))))
         
         CLLocationManager().requestWhenInUseAuthorization()
     }
@@ -74,13 +74,13 @@ final class MockAuthorizationProvider: AuthorizationProviding {
 }
 #Preview {
     let speedModel = MockLocationProvider(initialValue: 0.0)
-    let altitudeModel = MockLocationProvider(initialValue: nil as Double?)
+    let altitudeModel = MockLocationProvider(initialValue: 0.0)
     let altitudeChangeModel = MockLocationProvider(initialValue: (Date(), 0.0))
     let accelModel = MockLocationProvider(initialValue: (Date(), 0.0))
     var speed = 0.0
     var altitude = 0.0
     VStack {
-        ContentView(speedViewModel: SpeedViewModel(speedModel), altitudeViewModel: AltitudeViewModel(altitudeModel), altitudeChangeViewModel: AltitudeChangeViewModel(altitudeChangeModel), locationStatusViewModel: LocationStatusViewModel(MockAuthorizationProvider(status: .authorizedAlways)), accelerationViewModel: AccelerationViewModel(accelModel))
+        ContentView(speedViewModel: OneValueModel(speedModel), altitudeViewModel: OneValueModel(altitudeModel), altitudeChangeViewModel: SamplesModel(altitudeChangeModel), locationStatusViewModel: LocationStatusViewModel(MockAuthorizationProvider(status: .authorizedAlways)), accelerationViewModel: FirstDerivativeSamplesModel(SamplesModel(accelModel)))
         
         HStack {
             VStack {
@@ -108,7 +108,7 @@ final class MockAuthorizationProvider: AuthorizationProviding {
                     Text("higher")
                 }
                 Button {
-                    altitudeModel.send(value: speed)
+                    altitudeModel.send(value: altitude)
                     altitudeChangeModel.send(value: (Date(), altitude))
                     altitude -= 1
                 } label: {

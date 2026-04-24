@@ -37,6 +37,16 @@ struct NilToZero : LocationBehavior {
     }
 }
 
+struct MetersPerSecondToKmh : LocationBehavior {
+    let inner: any LocationBehavior<Double>
+
+    var initialValue: Double { inner.initialValue }
+    
+    func value(from location: CLLocation) -> Double {
+        inner.value(from: location) * 3.6
+    }
+}
+
 typealias TimestampedValue<T> = (Date, T)
 
 struct Timestamped<T> : LocationBehavior {

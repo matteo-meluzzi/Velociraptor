@@ -1,28 +1,12 @@
 import Combine
 import SwiftUI
 
-@MainActor
-final class AltitudeViewModel: ObservableObject {
-    @Published var displayAltitude: String = "–"
-
-    private let locationProvider: any LocationProviding<Double?>
-    private var cancellable: AnyCancellable?
-
-    init(_ locationProvider: any LocationProviding<Double?>) {
-        self.locationProvider = locationProvider
-        cancellable = locationProvider.publisher
-            .sink { [weak self] altitude in
-                self?.displayAltitude = altitude.map { "\(Int($0.rounded()))" } ?? "–"
-            }
-    }
-}
-
 struct AltitudeView: View {
-    @ObservedObject var viewModel: AltitudeViewModel
+    @ObservedObject var viewModel: OneValueModel
 
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: 4) {
-            Text(viewModel.displayAltitude)
+            Text(viewModel.displayValue)
                 .font(.title2)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()

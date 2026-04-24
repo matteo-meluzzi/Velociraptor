@@ -1,28 +1,12 @@
 import Combine
 import SwiftUI
 
-@MainActor
-final class SpeedViewModel: ObservableObject {
-    @Published var displaySpeed: String = "0.0"
-
-    private let locationProvider: any LocationProviding<Double>
-    private var cancellable: AnyCancellable?
-
-    init(_ locationProvider: any LocationProviding<Double>) {
-        self.locationProvider = locationProvider
-        cancellable = locationProvider.publisher
-            .sink { [weak self] speed in
-                self?.displaySpeed = String(format: "%.1f", speed * 3.6)
-            }
-    }
-}
-
 struct SpeedView: View {
-    @ObservedObject var viewModel: SpeedViewModel
+    @ObservedObject var viewModel: OneValueModel
 
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: 8) {
-            Text(viewModel.displaySpeed)
+            Text(viewModel.displayValue)
                 .font(.system(size: 120, weight: .thin, design: .rounded))
                 .monospacedDigit()
             Text("km/h")
