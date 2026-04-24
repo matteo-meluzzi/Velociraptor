@@ -18,9 +18,9 @@
 
 **⚠️ CRITICAL**: No US1 work can begin until this phase is complete.
 
-- [ ] T001 Add `altitudePublisher: AnyPublisher<Double?, Never>` to the protocol in `Velociraptor/LocationProviding.swift`
-- [ ] T002 [P] Add `altitudeSubject` (`CurrentValueSubject<Double?, Never>(nil)`), implement `altitudePublisher`, send `locations.last?.altitude` in `didUpdateLocations`, and send `nil` to `altitudeSubject` in `didFailWithError` (alongside existing `speedSubject.send(nil)`) in `Velociraptor/LocationManager.swift`
-- [ ] T003 [P] Add `altitudeSubject` (`CurrentValueSubject<Double?, Never>(nil)`), implement `altitudePublisher`, and add `func send(altitude: Double?)` helper to `MockLocationProvider` in `VelociraptorTests/SpeedViewModelTests.swift`
+- [x] T001 Add `altitudePublisher: AnyPublisher<Double?, Never>` to the protocol in `Velociraptor/LocationProviding.swift`
+- [x] T002 [P] Add `altitudeSubject` (`CurrentValueSubject<Double?, Never>(nil)`), implement `altitudePublisher`, send `locations.last?.altitude` in `didUpdateLocations`, and send `nil` to `altitudeSubject` in `didFailWithError` (alongside existing `speedSubject.send(nil)`) in `Velociraptor/LocationManager.swift`
+- [x] T003 [P] Add `altitudeSubject` (`CurrentValueSubject<Double?, Never>(nil)`), implement `altitudePublisher`, and add `func send(altitude: Double?)` helper to `MockLocationProvider` in `VelociraptorTests/SpeedViewModelTests.swift`
 
 **Checkpoint**: Build must pass (`xcodebuild build`) before proceeding. T001 + T002 + T003 committed in one atomic commit.
 
