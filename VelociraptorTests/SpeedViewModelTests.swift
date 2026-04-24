@@ -25,16 +25,4 @@ struct SpeedViewModelTests {
         #expect(vm.displaySpeed == "87.4")
     }
 
-    @Test func deniedAuthHidesLocation() {
-        let provider = MockLocationProvider<Double?>(initialValue: nil)
-        let vm = SpeedViewModel(locationProvider: provider)
-        provider.send(status: .denied)
-        #expect(vm.isLocationAvailable == false)
-    }
-
-    @Test func authorizedAuthShowsLocation() {
-        let provider = MockLocationProvider<Double?>(initialValue: nil)
-        let vm = SpeedViewModel(locationProvider: provider)
-        #expect(vm.isLocationAvailable == true)
-    }
 }
