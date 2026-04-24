@@ -6,10 +6,10 @@ final class SpeedViewModel: ObservableObject {
     @Published var displaySpeed: String = "0.0"
     @Published var isLocationAvailable: Bool = false
 
-    private let locationProvider: LocationProviding
+    private let locationProvider: any LocationProviding<Double?>
     private var cancellables = Set<AnyCancellable>()
 
-    init(locationProvider: LocationProviding) {
+    init(locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
         bindPublishers()
     }

@@ -5,10 +5,10 @@ import SwiftUI
 final class AltitudeViewModel: ObservableObject {
     @Published var displayAltitude: String = "– m"
 
-    private let locationProvider: LocationProviding
+    private let locationProvider: any LocationProviding<Double?>
     private var cancellables = Set<AnyCancellable>()
 
-    init(locationProvider: LocationProviding) {
+    init(locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
         bindPublishers()
     }

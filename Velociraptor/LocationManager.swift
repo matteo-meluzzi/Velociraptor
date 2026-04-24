@@ -2,10 +2,13 @@ import Combine
 import CoreLocation
 
 protocol LocationBehavior {
-    func value(from location: CLLocation) -> Double?
+    associatedtype Value
+    var initialValue: Value { get }
+    func value(from location: CLLocation) -> Value
 }
 
 struct SpeedBehavior: LocationBehavior {
+    var initialValue: Double? { nil }
     func value(from location: CLLocation) -> Double? {
         let speed = location.speed
         return speed >= 0 ? speed : nil
@@ -13,18 +16,21 @@ struct SpeedBehavior: LocationBehavior {
 }
 
 struct AltitudeBehavior: LocationBehavior {
+    var initialValue: Double? { nil }
     func value(from location: CLLocation) -> Double? {
         location.altitude
     }
 }
 
-final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProviding {
-    private let manager = CLLocationManager()
-    private let behavior: any LocationBehavior
-    private let valueSubject = CurrentValueSubject<Double?, Never>(nil)
+final class LocationManager<Behavior: LocationBehavior>: NSObject, CLLocationManagerDelegate, LocationProviding {
+    typealias Value = Behavior.Value
+
+    private let clManager = CLLocationManager()
+    private let behavior: Behavior
+    private let valueSubject: CurrentValueSubject<Behavior.Value, Never>
     private let authorizationSubject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
-    var valuePublisher: AnyPublisher<Double?, Never> {
+    var valuePublisher: AnyPublisher<Behavior.Value, Never> {
         valueSubject.eraseToAnyPublisher()
     }
 
@@ -32,26 +38,27 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
         authorizationSubject.eraseToAnyPublisher()
     }
 
-    init(behavior: any LocationBehavior) {
+    init(behavior: Behavior) {
         self.behavior = behavior
-        authorizationSubject = CurrentValueSubject(manager.authorizationStatus)
+        valueSubject = CurrentValueSubject(behavior.initialValue)
+        authorizationSubject = CurrentValueSubject(clManager.authorizationStatus)
         super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        manager.activityType = .automotiveNavigation
+        clManager.delegate = self
+        clManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        clManager.activityType = .automotiveNavigation
         requestAuthorization()
     }
 
     func requestAuthorization() {
-        manager.requestWhenInUseAuthorization()
+        clManager.requestWhenInUseAuthorization()
     }
 
     func startUpdatingLocation() {
-        manager.startUpdatingLocation()
+        clManager.startUpdatingLocation()
     }
 
     func stopUpdatingLocation() {
-        manager.stopUpdatingLocation()
+        clManager.stopUpdatingLocation()
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -60,7 +67,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        let status = manager.authorizationStatus
+        let status = clManager.authorizationStatus
         authorizationSubject.send(status)
         if status == .authorizedWhenInUse || status == .authorizedAlways {
             startUpdatingLocation()
@@ -68,6 +75,6 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        valueSubject.send(nil)
+        valueSubject.send(behavior.initialValue)
     }
 }

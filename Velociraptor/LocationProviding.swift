@@ -1,8 +1,9 @@
 import Combine
 import CoreLocation
 
-protocol LocationProviding: AnyObject {
-    var valuePublisher: AnyPublisher<Double?, Never> { get }
+protocol LocationProviding<Value>: AnyObject {
+    associatedtype Value
+    var valuePublisher: AnyPublisher<Value, Never> { get }
     var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> { get }
     func requestAuthorization()
     func startUpdatingLocation()
