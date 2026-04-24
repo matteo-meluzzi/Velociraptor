@@ -4,9 +4,6 @@ import CoreLocation
 protocol LocationProviding<Value>: AnyObject {
     associatedtype Value
     var valuePublisher: AnyPublisher<Value, Never> { get }
-    func requestAuthorization()
-    func startUpdatingLocation()
-    func stopUpdatingLocation()
 }
 
 protocol LocationBehavior {
@@ -51,16 +48,12 @@ final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationM
         requestAuthorization()
     }
 
-    func requestAuthorization() {
+    private func requestAuthorization() {
         clManager.requestWhenInUseAuthorization()
     }
 
-    func startUpdatingLocation() {
+    private func startUpdatingLocation() {
         clManager.startUpdatingLocation()
-    }
-
-    func stopUpdatingLocation() {
-        clManager.stopUpdatingLocation()
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

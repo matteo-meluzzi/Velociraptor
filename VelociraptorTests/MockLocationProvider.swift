@@ -11,9 +11,5 @@ final class MockLocationProvider<T>: LocationProviding {
         valueSubject = CurrentValueSubject(initialValue)
     }
 
-    func requestAuthorization() {}
-    func startUpdatingLocation() {}
-    func stopUpdatingLocation() {}
-
     func send(value: T) { valueSubject.send(value) }
 }
