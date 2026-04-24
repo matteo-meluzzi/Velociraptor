@@ -34,10 +34,10 @@
 
 ### Implementation
 
-- [ ] T004 [P] [US1] Merge `SpeedViewModel` into `Velociraptor/SpeedView.swift` (move the class definition to the top of the file), remove the two `Spacer()` calls from `SpeedView.body` (layout moves to app root), then delete `Velociraptor/SpeedViewModel.swift`
-- [ ] T005 [P] [US1] Create `Velociraptor/AltitudeView.swift` containing `AltitudeViewModel` (ObservableObject, `@Published var displayAltitude: String = "– m"`, subscribes to `locationProvider.altitudePublisher`, formats as `"\(Int(altitude.rounded())) m"` or `"– m"` for nil) and `AltitudeView` (renders `Text(viewModel.displayAltitude)` with `.font(.title2)`, `.foregroundStyle(.secondary)`, `.monospacedDigit()`)
-- [ ] T006 [US1] Delete `Velociraptor/ContentView.swift` and update `Velociraptor/VelociraptorApp.swift`: create one shared `LocationManager`, instantiate `SpeedViewModel` and `AltitudeViewModel` as `@StateObject` using explicit `StateObject(wrappedValue:)` init, and replace `ContentView()` in `WindowGroup` with a `VStack(spacing: 8) { Spacer(); SpeedView(...); AltitudeView(...); Spacer() }.frame(maxWidth: .infinity, maxHeight: .infinity)` (depends on T004, T005)
-- [ ] T007 [P] [US1] Create `VelociraptorTests/AltitudeViewModelTests.swift` with `@MainActor` test struct covering: nil → "– m" placeholder, positive altitude (e.g. 52.4 → "52 m"), negative altitude (e.g. -3.7 → "-4 m"), nil → real reading transition ("– m" then "52 m")
+- [x] T004 [P] [US1] Merge `SpeedViewModel` into `Velociraptor/SpeedView.swift` (move the class definition to the top of the file), remove the two `Spacer()` calls from `SpeedView.body` (layout moves to app root), then delete `Velociraptor/SpeedViewModel.swift`
+- [x] T005 [P] [US1] Create `Velociraptor/AltitudeView.swift` containing `AltitudeViewModel` (ObservableObject, `@Published var displayAltitude: String = "– m"`, subscribes to `locationProvider.altitudePublisher`, formats as `"\(Int(altitude.rounded())) m"` or `"– m"` for nil) and `AltitudeView` (renders `Text(viewModel.displayAltitude)` with `.font(.title2)`, `.foregroundStyle(.secondary)`, `.monospacedDigit()`)
+- [x] T006 [US1] Delete `Velociraptor/ContentView.swift` and update `Velociraptor/VelociraptorApp.swift`: create one shared `LocationManager`, instantiate `SpeedViewModel` and `AltitudeViewModel` as `@StateObject` using explicit `StateObject(wrappedValue:)` init, and replace `ContentView()` in `WindowGroup` with a `VStack(spacing: 8) { Spacer(); SpeedView(...); AltitudeView(...); Spacer() }.frame(maxWidth: .infinity, maxHeight: .infinity)` (depends on T004, T005)
+- [x] T007 [P] [US1] Create `VelociraptorTests/AltitudeViewModelTests.swift` with `@MainActor` test struct covering: nil → "– m" placeholder, positive altitude (e.g. 52.4 → "52 m"), negative altitude (e.g. -3.7 → "-4 m"), nil → real reading transition ("– m" then "52 m")
 
 **Checkpoint**: Build passes, all tests pass, altitude appears below speed in simulator with correct font size and "m" unit always present.
 
@@ -47,8 +47,8 @@
 
 **Purpose**: Final validation against the acceptance checklist.
 
-- [ ] T008 Verify build is clean: `xcodebuild build -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] T009 Verify all tests pass: `xcodebuild test -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] T008 Verify build is clean: `xcodebuild build -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] T009 Verify all tests pass: `xcodebuild test -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'`
 - [ ] T010 Run through the acceptance checklist in `specs/002-altitude-display/quickstart.md` on simulator (inject location via Features → Location → Custom Location to verify altitude value updates and placeholder shows without a fix)
 
 ---
