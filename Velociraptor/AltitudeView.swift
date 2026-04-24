@@ -10,7 +10,7 @@ final class AltitudeViewModel: ObservableObject {
 
     init(locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
-        locationProvider.valuePublisher
+        locationProvider.publisher
             .sink { [weak self] altitude in
                 self?.displayAltitude = altitude.map { "\(Int($0.rounded()))" } ?? "–"
             }

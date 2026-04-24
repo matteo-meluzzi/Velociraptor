@@ -3,7 +3,7 @@ import CoreLocation
 
 protocol LocationProviding<Value>: AnyObject {
     associatedtype Value
-    var valuePublisher: AnyPublisher<Value, Never> { get }
+    var publisher: AnyPublisher<Value, Never> { get }
 }
 
 protocol LocationBehavior {
@@ -32,15 +32,15 @@ final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationM
 
     private let clManager = CLLocationManager()
     private let behavior: Behavior
-    private let valueSubject: CurrentValueSubject<Behavior.Value, Never>
+    private let subject: CurrentValueSubject<Behavior.Value, Never>
 
-    var valuePublisher: AnyPublisher<Behavior.Value, Never> {
-        valueSubject.eraseToAnyPublisher()
+    var publisher: AnyPublisher<Behavior.Value, Never> {
+        subject.eraseToAnyPublisher()
     }
 
     init(behavior: Behavior) {
         self.behavior = behavior
-        valueSubject = CurrentValueSubject(behavior.initialValue)
+        subject = CurrentValueSubject(behavior.initialValue)
         super.init()
         clManager.delegate = self
         clManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -58,7 +58,7 @@ final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationM
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        valueSubject.send(behavior.value(from: location))
+        subject.send(behavior.value(from: location))
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -69,7 +69,7 @@ final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationM
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        valueSubject.send(behavior.initialValue)
+        subject.send(behavior.initialValue)
     }
 }
 
@@ -77,7 +77,7 @@ class AuthorizationStatusPublisher: NSObject, CLLocationManagerDelegate {
     private let clManager = CLLocationManager()
     private let subject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
-    var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
+    var publisher: AnyPublisher<CLAuthorizationStatus, Never> {
         subject.eraseToAnyPublisher()
     }
 

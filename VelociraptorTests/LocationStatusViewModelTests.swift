@@ -6,7 +6,7 @@ import CoreLocation
 final class MockAuthorizationStatusPublisher: AuthorizationStatusPublisher {
     private let subject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
-    override var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
+    override var publisher: AnyPublisher<CLAuthorizationStatus, Never> {
         subject.eraseToAnyPublisher()
     }
 

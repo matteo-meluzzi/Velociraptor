@@ -11,7 +11,7 @@ final class LocationStatusViewModel: ObservableObject {
 
     init(_ authPublisher: AuthorizationStatusPublisher) {
         self.authPublisher = authPublisher
-        cancellable = authPublisher.authorizationStatusPublisher
+        cancellable = authPublisher.publisher
             .sink { [weak self] status in
                 guard let self else { return }
                 switch status {

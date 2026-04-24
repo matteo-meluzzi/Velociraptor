@@ -10,7 +10,7 @@ final class SpeedViewModel: ObservableObject {
 
     init(locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
-        locationProvider.valuePublisher
+        locationProvider.publisher
             .sink { [weak self] speed in
                 self?.displaySpeed = String(format: "%.1f", (speed ?? 0) * 3.6)
             }
