@@ -8,7 +8,7 @@ final class AltitudeViewModel: ObservableObject {
     private let locationProvider: any LocationProviding<Double?>
     private var cancellable: AnyCancellable?
 
-    init(locationProvider: any LocationProviding<Double?>) {
+    init(_ locationProvider: any LocationProviding<Double?>) {
         self.locationProvider = locationProvider
         cancellable = locationProvider.publisher
             .sink { [weak self] altitude in

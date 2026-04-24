@@ -6,7 +6,7 @@ protocol LocationProviding<Value>: AnyObject {
     var publisher: AnyPublisher<Value, Never> { get }
 }
 
-protocol LocationBehavior {
+protocol LocationBehavior<Value> {
     associatedtype Value
     var initialValue: Value { get }
     func value(from location: CLLocation) -> Value
@@ -27,6 +27,32 @@ struct AltitudeBehavior: LocationBehavior {
     }
 }
 
+struct NilToZero : LocationBehavior {
+    let inner: any LocationBehavior<Double?>
+    
+    var initialValue: Double { inner.initialValue ?? 0.0 }
+    
+    func value(from location: CLLocation) -> Double {
+        inner.value(from: location) ?? 0.0
+    }
+}
+
+typealias TimestampedValue<T> = (Date, T)
+
+struct Timestamped<T> : LocationBehavior {
+    let inner: any LocationBehavior<T>
+    
+    private func timestamp(_ value: T) -> TimestampedValue<T> {
+        return (Date(), value)
+    }
+    
+    var initialValue: TimestampedValue<T> { timestamp(inner.initialValue) }
+    
+    func value(from location: CLLocation) -> TimestampedValue<T> {
+        timestamp(inner.value(from: location))
+    }
+}
+
 final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationManagerDelegate, LocationProviding {
     typealias Value = Behavior.Value
 
@@ -44,16 +70,7 @@ final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationM
         super.init()
         clManager.delegate = self
         clManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        clManager.activityType = .automotiveNavigation
-        requestAuthorization()
-    }
-
-    private func requestAuthorization() {
-        clManager.requestWhenInUseAuthorization()
-    }
-
-    private func startUpdatingLocation() {
-        clManager.startUpdatingLocation()
+        clManager.activityType = .fitness
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -64,7 +81,7 @@ final class LocationPublisher<Behavior: LocationBehavior>: NSObject, CLLocationM
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = clManager.authorizationStatus
         if status == .authorizedWhenInUse || status == .authorizedAlways {
-            startUpdatingLocation()
+            clManager.startUpdatingLocation()
         }
     }
 
