@@ -5,9 +5,11 @@ import CoreLocation
 
 final class MockLocationProvider: LocationProviding {
     private let speedSubject = CurrentValueSubject<Double?, Never>(nil)
+    private let altitudeSubject = CurrentValueSubject<Double?, Never>(nil)
     private let authorizationSubject = CurrentValueSubject<CLAuthorizationStatus, Never>(.authorizedWhenInUse)
 
     var speedPublisher: AnyPublisher<Double?, Never> { speedSubject.eraseToAnyPublisher() }
+    var altitudePublisher: AnyPublisher<Double?, Never> { altitudeSubject.eraseToAnyPublisher() }
     var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> { authorizationSubject.eraseToAnyPublisher() }
 
     func requestAuthorization() {}
@@ -15,6 +17,7 @@ final class MockLocationProvider: LocationProviding {
     func stopUpdatingLocation() {}
 
     func send(speed: Double?) { speedSubject.send(speed) }
+    func send(altitude: Double?) { altitudeSubject.send(altitude) }
     func send(status: CLAuthorizationStatus) { authorizationSubject.send(status) }
 }
 

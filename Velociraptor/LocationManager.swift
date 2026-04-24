@@ -4,10 +4,15 @@ import CoreLocation
 final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProviding {
     private let manager = CLLocationManager()
     private let speedSubject = CurrentValueSubject<Double?, Never>(nil)
+    private let altitudeSubject = CurrentValueSubject<Double?, Never>(nil)
     private let authorizationSubject: CurrentValueSubject<CLAuthorizationStatus, Never>
 
     var speedPublisher: AnyPublisher<Double?, Never> {
         speedSubject.eraseToAnyPublisher()
+    }
+
+    var altitudePublisher: AnyPublisher<Double?, Never> {
+        altitudeSubject.eraseToAnyPublisher()
     }
 
     var authorizationStatusPublisher: AnyPublisher<CLAuthorizationStatus, Never> {
@@ -38,6 +43,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         let speed = locations.last?.speed
         speedSubject.send(speed.flatMap { $0 >= 0 ? $0 : nil })
+        altitudeSubject.send(locations.last?.altitude)
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -50,5 +56,6 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, LocationProvid
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         speedSubject.send(nil)
+        altitudeSubject.send(nil)
     }
 }
