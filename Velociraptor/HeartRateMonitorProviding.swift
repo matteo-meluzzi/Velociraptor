@@ -81,6 +81,8 @@ protocol HeartRateMonitorProviding: AnyObject {
     func connect(to monitorID: UUID)
     /// Idempotent; called at launch and when the scene becomes active.
     func reconnectIfNeeded()
+    /// User-initiated; disconnects the current or pending monitor and forgets it, so it isn't reconnected at launch.
+    func disconnect()
 }
 
 protocol LastMonitorStoring: AnyObject {

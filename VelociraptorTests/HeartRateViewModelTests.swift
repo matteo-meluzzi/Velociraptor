@@ -174,6 +174,25 @@ struct HeartRateViewModelTests {
         #expect(!viewModel.isPickerPresented)
     }
 
+    @Test func selectingTheConnectedMonitorDisconnectsIt() {
+        service.send(availability: .available)
+        service.send(state: .connected(monitorID: monitorID, name: "Polar H10"))
+        viewModel.connectButtonTapped()
+        viewModel.select(monitor())
+        #expect(service.disconnectCallCount == 1)
+        #expect(service.connectedIDs.isEmpty)
+        #expect(!viewModel.isPickerPresented)
+    }
+
+    @Test func selectingAnotherMonitorWhileConnectedSwitches() {
+        service.send(availability: .available)
+        service.send(state: .connected(monitorID: otherID, name: "Wahoo"))
+        viewModel.connectButtonTapped()
+        viewModel.select(monitor())
+        #expect(service.connectedIDs == [monitorID])
+        #expect(service.disconnectCallCount == 0)
+    }
+
     @Test func monitorsMirrorService() {
         let list = [monitor("B"), DiscoveredMonitor(id: otherID, name: "A", rssi: -80, lastSeen: clock.now)]
         service.send(monitors: list)

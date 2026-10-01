@@ -70,6 +70,53 @@ struct HeartRateConnectionMachineTests {
         #expect(machine.state == before)
     }
 
+    @Test func userDisconnectFromConnectedCancelsAndForgets() {
+        var machine = connected()
+        #expect(machine.handle(.userDisconnected) == [.cancel(id: m), .forgetLastMonitor])
+        #expect(machine.state == .none)
+    }
+
+    @Test func userDisconnectWhileConnectingAlsoCancelsTimeout() {
+        var machine = connecting(origin: .user)
+        #expect(machine.handle(.userDisconnected) == [.cancelTimeout, .cancel(id: m), .forgetLastMonitor])
+        #expect(machine.state == .none)
+    }
+
+    @Test func userDisconnectFromLostStopsReconnecting() {
+        var machine = lost()
+        #expect(machine.handle(.userDisconnected) == [.cancel(id: m), .forgetLastMonitor])
+        #expect(machine.state == .none)
+        #expect(machine.handle(.sceneActive) == [])
+        #expect(machine.handle(.availabilityChanged(.poweredOff)) == [])
+        #expect(machine.handle(.availabilityChanged(.available)) == [])
+        #expect(machine.state == .none)
+    }
+
+    @Test func disconnectCallbackAfterUserDisconnectIsIgnored() {
+        var machine = connected()
+        _ = machine.handle(.userDisconnected)
+        #expect(machine.handle(.didDisconnect(id: m)) == [])
+        #expect(machine.state == .none)
+    }
+
+    @Test func userDisconnectWithNothingConnectedForgetsStoredMonitor() {
+        var machine = HeartRateConnectionMachine()
+        _ = machine.handle(.launch(storedID: m, storedName: name))
+        #expect(machine.handle(.userDisconnected) == [.forgetLastMonitor])
+        #expect(machine.handle(.availabilityChanged(.available)) == [])
+        #expect(machine.state == .none)
+    }
+
+    @Test func userDisconnectCancelsPendingLaunchReconnect() {
+        var machine = HeartRateConnectionMachine()
+        _ = machine.handle(.launch(storedID: m, storedName: name))
+        _ = machine.handle(.availabilityChanged(.available))
+        _ = machine.handle(.userDisconnected)
+        #expect(machine.state == .none)
+        #expect(machine.handle(.availabilityChanged(.poweredOff)) == [])
+        #expect(machine.handle(.availabilityChanged(.available)) == [])
+    }
+
     @Test func selectingLostOrAutomaticMonitorBecomesUserConnect() {
         var fromLost = lost()
         var fromAutomatic = connecting(origin: .automatic)

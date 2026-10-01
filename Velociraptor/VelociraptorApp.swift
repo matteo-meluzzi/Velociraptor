@@ -15,6 +15,8 @@ struct ContentView : View {
     /// Share of the screen height (from the top edge) taken by speed and heart rate over the map.
     private static let topPanelShare: CGFloat = 0.3
     private static let topPanelPadding: CGFloat = 6
+    private static let topPanelSpacing: CGFloat = 16
+    private static let bottomBarSpacing: CGFloat = 32
 
     private struct ScreenMetrics: Equatable {
         var height: CGFloat = 0
@@ -101,16 +103,18 @@ struct ContentView : View {
 
             VStack(spacing: 0) {
                 let content = max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding)
-                HStack(alignment: .center, spacing: 16) {
+                let showsHeartRate = heartRateViewModel.heartRateText != nil
+                HStack(alignment: .center, spacing: Self.topPanelSpacing) {
+                    // Speed and heart rate each get half the width; speed alone gets all of it.
                     VStack(spacing: 2) {
                         SpeedView(viewModel: speedViewModel, digitSize: min(120, content * 0.65))
                         LocationStatusView(viewModel: locationStatusViewModel)
                     }
-                    // Fixed-size gauge (no space reserved when hidden); the speed digits shrink to fit the rest.
-                    if heartRateViewModel.heartRateText != nil {
-                        let gauge = min(content, 150)
-                        HeartRateView(viewModel: heartRateViewModel, size: gauge)
-                            .frame(width: gauge, height: gauge)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    if showsHeartRate {
+                        // The gauge keeps its aspect ratio and shrinks to fit its half.
+                        HeartRateView(viewModel: heartRateViewModel, size: content)
+                            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: content)
                     }
                 }
                 .padding(.horizontal)
@@ -122,13 +126,14 @@ struct ContentView : View {
 
                 Spacer()
 
+                // Large, well-spaced targets: easy to hit while moving.
                 ViewThatFits(in: .horizontal) {
-                    HStack { importButton; heartRateButton; closeTrackButton }
+                    HStack(spacing: Self.bottomBarSpacing) { importButton; heartRateButton; closeTrackButton }
                         .labelStyle(.titleOnly)
-                    HStack { importButton; heartRateButton; closeTrackButton }
+                    HStack(spacing: Self.bottomBarSpacing) { importButton; heartRateButton; closeTrackButton }
                         .labelStyle(.iconOnly)
                 }
-                .controlSize(.small)
+                .controlSize(.regular)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
@@ -263,6 +268,7 @@ final class PreviewHeartRateService: HeartRateMonitorProviding {
     func stopScanning() {}
     func connect(to monitorID: UUID) { stateSubject.send(.connecting(monitorID: monitorID, name: "Polar H10", origin: .user)) }
     func reconnectIfNeeded() {}
+    func disconnect() { stateSubject.send(.none) }
 
     static func connected(bpm: Int = 142) -> PreviewHeartRateService {
         let service = PreviewHeartRateService()

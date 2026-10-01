@@ -3,6 +3,8 @@ import Foundation
 enum ConnectionEvent: Equatable {
     case launch(storedID: UUID?, storedName: String?)
     case userSelected(id: UUID, name: String)
+    /// The user tapped the connected monitor in the picker: disconnect and forget it.
+    case userDisconnected
     case didConnect(id: UUID)
     case subscribed(id: UUID)
     case didFail(id: UUID)
@@ -19,6 +21,7 @@ enum ConnectionEffect: Equatable {
     case startTimeout(id: UUID)
     case cancelTimeout
     case saveLastMonitor(id: UUID, name: String)
+    case forgetLastMonitor
     case emitFailure(name: String)
 }
 
@@ -41,6 +44,18 @@ struct HeartRateConnectionMachine {
 
         case .userSelected(let id, let name):
             return userSelected(id: id, name: name)
+
+        case .userDisconnected:
+            guard let id = state.monitorID else {
+                pendingLaunch = nil
+                return [.forgetLastMonitor]
+            }
+            var effects: [ConnectionEffect] = []
+            if case .connecting = state { effects.append(.cancelTimeout) }
+            state = .none
+            hasPendingConnect = false
+            pendingLaunch = nil
+            return effects + [.cancel(id: id), .forgetLastMonitor]
 
         case .didConnect:
             return []

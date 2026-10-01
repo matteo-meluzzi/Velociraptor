@@ -86,8 +86,13 @@ final class HeartRateViewModel: ObservableObject {
         refresh()
     }
 
+    /// Connects to `monitor`; tapping the monitor that is already connected disconnects it instead.
     func select(_ monitor: DiscoveredMonitor) {
-        service.connect(to: monitor.id)
+        if monitor.id == connectedMonitorID {
+            service.disconnect()
+        } else {
+            service.connect(to: monitor.id)
+        }
         isPickerPresented = false
     }
 

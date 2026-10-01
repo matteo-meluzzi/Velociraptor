@@ -19,11 +19,13 @@ final class MockHeartRateService: HeartRateMonitorProviding {
     private(set) var stopScanningCallCount = 0
     private(set) var connectedIDs: [UUID] = []
     private(set) var reconnectIfNeededCallCount = 0
+    private(set) var disconnectCallCount = 0
 
     func startScanning() { startScanningCallCount += 1 }
     func stopScanning() { stopScanningCallCount += 1 }
     func connect(to monitorID: UUID) { connectedIDs.append(monitorID) }
     func reconnectIfNeeded() { reconnectIfNeededCallCount += 1 }
+    func disconnect() { disconnectCallCount += 1 }
 
     func send(availability: BluetoothAvailability) { availabilitySubject.send(availability) }
     func send(state: MonitorConnectionState) { stateSubject.send(state) }

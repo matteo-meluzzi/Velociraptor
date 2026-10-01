@@ -83,6 +83,10 @@ final class BluetoothHeartRateService: NSObject, HeartRateMonitorProviding, CBCe
         send(.sceneActive)
     }
 
+    func disconnect() {
+        send(.userDisconnected)
+    }
+
     // MARK: - Machine plumbing
 
     private func createCentralIfNeeded() {
@@ -123,6 +127,9 @@ final class BluetoothHeartRateService: NSObject, HeartRateMonitorProviding, CBCe
         case .saveLastMonitor(let id, let name):
             store.lastMonitorID = id
             store.lastMonitorName = name
+        case .forgetLastMonitor:
+            store.lastMonitorID = nil
+            store.lastMonitorName = nil
         case .emitFailure(let name):
             failureSubject.send(name)
         }
