@@ -1,22 +1,17 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 0.0.0 → 1.1.0
+Version change: 1.1.0 → 1.3.0 (1.2.0 and 1.3.0 amended in sequence, uncommitted)
+Modified principles:
+  - II. Test Discipline: added rule that tests MUST verify behaviour, not implementation (1.3.0)
 Added sections:
-  - I. Build Integrity (new)
-  - II. Test Discipline (new)
-  - III. Peer Review Before Commit (new)
-  - IV. Task Completion Gate (new)
-  - V. SwiftUI-First (new)
-  - Quality Gates (new)
-  - Development Workflow (new)
-  - Governance (updated from template)
-Removed sections: none (initial creation from template)
+  - VII. Specification Review Gate (new principle)
+  - Quality Gates: new planning gate 4 for spec review (old gate 4 renumbered to 5)
+  - Development Workflow: specification review step
+Removed sections: none
 Templates requiring updates:
-  ✅ .specify/memory/constitution.md — this file
-  ✅ .specify/templates/plan-template.md — Constitution Check section covers build/test/review gates
-  ✅ .specify/templates/tasks-template.md — task completion discipline aligns with Principle IV
-  ✅ .specify/templates/spec-template.md — no structural changes required
+  ✅ .specify/templates/plan-template.md: Constitution Check reads principles at runtime
+  ⚠ .specify/templates/spec-template.md: consider adding a "Review status" field (optional)
 Deferred TODOs: none
 -->
 
@@ -40,8 +35,17 @@ and confirm exit code 0 before committing.
 All tests MUST pass before any git commit is created. A failing test suite is a blocker —
 no commit proceeds until `xcodebuild test` exits cleanly.
 
+Tests MUST verify behaviour, not implementation. A test exercises a unit through its public
+interface and asserts on observable outcomes: return values, published state, emitted events,
+or effects on collaborators at a real boundary (e.g. the Bluetooth layer behind a protocol).
+Tests MUST NOT assert on private state, internal call order, or how a result was computed,
+and MUST NOT need to change when code is refactored without changing its behaviour.
+Test doubles are permitted only at boundaries the unit does not own.
+
 **Rationale**: Tests document intended behaviour. A passing build with failing tests means
-the code compiles but does not behave correctly. Both gates MUST be green together.
+the code compiles but does not behave correctly. Both gates MUST be green together. Tests
+coupled to implementation details break on harmless refactors and can still pass when the
+behaviour is wrong, so they cost maintenance without protecting correctness.
 
 **Gate**: Run `xcodebuild test -scheme Velociraptor -destination 'platform=iOS Simulator,name=iPhone 16'`
 and confirm all tests pass before committing.
@@ -86,6 +90,25 @@ supporting artifacts (`spec.md`, `research.md`, `data-model.md`). Wait for an ex
 **APPROVED** verdict. Address all **BLOCKED** issues and re-run the reviewer until approval
 is granted. Only then proceed to implementation.
 
+### VII. Specification Review Gate
+
+Every feature specification produced by Spec Kit (`spec.md`, including any updates from
+`/speckit-clarify`) MUST be reviewed by an independent reviewer before it is considered done.
+The reviewer MUST NOT be the author of the specification. For AI-authored specifications,
+this means a separate reviewer agent spawned with fresh context. The reviewer's explicit
+**APPROVED** verdict is a hard prerequisite for proceeding to `/speckit-plan`.
+
+**Rationale**: The specification defines what gets built. Ambiguities, missing requirements,
+untestable acceptance criteria, or scope creep cost the least to fix at this stage. An author
+reviewing their own spec tends to read what they meant rather than what they wrote.
+
+**Gate**: After `/speckit-specify` (and `/speckit-clarify`, if run) completes, give the full
+`spec.md` and any checklists under the feature directory to an independent reviewer. The
+reviewer checks completeness, unambiguous and testable requirements, measurable success
+criteria, and consistency with this constitution. Wait for an explicit **APPROVED** verdict.
+Address all **BLOCKED** issues and re-run the review until approval is granted. A
+specification without that approval is not done, and planning MUST NOT begin.
+
 ### V. SwiftUI-First
 
 The app MUST be built exclusively with SwiftUI. UIKit and AppKit integrations are
@@ -101,17 +124,24 @@ Every code change MUST pass the following gates **in order** before a git commit
 
 1. `xcodebuild build` exits with code 0.
 2. `xcodebuild test` exits with all tests passing.
-3. A reviewer agent reviews `git diff` (staged + unstaged) and provides sign-off.
+3. A reviewer agent reviews `git diff` (staged + unstaged) and provides sign-off. The
+   review MUST flag tests that assert on implementation details rather than behaviour
+   (Principle II).
 
 Skipping or reordering these gates is a constitution violation and the commit MUST NOT
 proceed.
 
-Before implementation work begins, the following planning gate MUST also be satisfied:
+Before planning and implementation work begins, the following gates MUST also be satisfied:
 
-4. A reviewer agent reviews `plan.md` (with `spec.md`, `research.md`, `data-model.md`) and returns an explicit **APPROVED** verdict (Principle VI).
+4. An independent reviewer reviews `spec.md` and returns an explicit **APPROVED** verdict
+   (Principle VII). Planning MUST NOT begin before that.
+5. A reviewer agent reviews `plan.md` (with `spec.md`, `research.md`, `data-model.md`) and returns an explicit **APPROVED** verdict (Principle VI).
 
 ## Development Workflow
 
+- **Specification review**: Have an independent reviewer approve `spec.md` before
+  planning (Principle VII).
+- **Plan review**: Have a reviewer agent approve `plan.md` before implementation (Principle VI).
 - **Implementation**: Write the smallest change that satisfies the task requirements.
 - **Build check**: Verify build integrity (Principle I).
 - **Test check**: Verify test discipline (Principle II).
@@ -140,4 +170,4 @@ on every change.
 Check section verifying that the planned approach does not violate any principle before
 work begins.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-04-24
+**Version**: 1.3.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-10-01
