@@ -18,6 +18,11 @@ struct TrackMapView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
+    static func dismantleUIView(_ container: TrackMapContainer, coordinator: Coordinator) {
+        // The display link retains the coordinator; stop it when the map goes away.
+        coordinator.stopCameraAnimation()
+    }
+
     func makeUIView(context: Context) -> TrackMapContainer {
         let container = TrackMapContainer()
         container.mapView.delegate = context.coordinator
@@ -176,17 +181,75 @@ struct TrackMapView: UIViewRepresentable {
             if firstApplication { updateZoomRange() }
         }
 
+        // MARK: Camera animation
+
+        /// Camera moves are animated frame by frame (not with `UIView.animate`, during which MapKit reports the
+        /// final camera while still drawing intermediate ones), so chevrons, arrow and north indicator, which are
+        /// placed from the reported camera, stay exactly on the map at every frame.
+        private var cameraAnimation: (
+            from: MKMapCamera, to: MKMapCamera, start: CFTimeInterval, duration: TimeInterval, easeOutOnly: Bool
+        )?
+        private var displayLink: CADisplayLink?
+
         private func setCamera(_ camera: MKMapCamera, duration: TimeInterval) {
             guard let mapView else { return }
-            applyingProgrammatically = true
-            defer { applyingProgrammatically = false }
-            if duration > 0 {
-                UIView.animate(withDuration: duration, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
-                    mapView.camera = camera
-                }
-            } else {
-                mapView.camera = camera
+            guard duration > 0 else {
+                stopCameraAnimation()
+                setCameraNow(camera)
+                return
             }
+            // Restarting mid-animation (e.g. frequent compass updates) keeps moving instead of easing in from rest.
+            let restarting = cameraAnimation != nil
+            cameraAnimation = (mapView.camera.copy() as! MKMapCamera, camera, CACurrentMediaTime(), duration, restarting)
+            if displayLink == nil {
+                let link = CADisplayLink(target: self, selector: #selector(stepCameraAnimation))
+                link.add(to: .main, forMode: .common)
+                displayLink = link
+            }
+        }
+
+        private func setCameraNow(_ camera: MKMapCamera) {
+            applyingProgrammatically = true
+            mapView?.camera = camera
+            applyingProgrammatically = false
+        }
+
+        func stopCameraAnimation() {
+            displayLink?.invalidate()
+            displayLink = nil
+            cameraAnimation = nil
+        }
+
+        @objc private func stepCameraAnimation() {
+            // A user gesture takes over the camera (M1/M4).
+            guard let animation = cameraAnimation, !gestureActive, let mapView, !isFingerDown(mapView) else {
+                stopCameraAnimation()
+                return
+            }
+            let t = min(1, (CACurrentMediaTime() - animation.start) / animation.duration)
+            guard t < 1 else {
+                // Stop first, so the final region change sees a settled camera (zoom-range refresh).
+                stopCameraAnimation()
+                setCameraNow(animation.to)
+                return
+            }
+            let eased = animation.easeOutOnly ? 1 - (1 - t) * (1 - t) : t * t * (3 - 2 * t)
+            setCameraNow(Self.interpolate(animation.from, animation.to, eased))
+        }
+
+        private static func interpolate(_ a: MKMapCamera, _ b: MKMapCamera, _ t: Double) -> MKMapCamera {
+            let camera = b.copy() as! MKMapCamera
+            camera.centerCoordinate = CLLocationCoordinate2D(
+                latitude: a.centerCoordinate.latitude + (b.centerCoordinate.latitude - a.centerCoordinate.latitude) * t,
+                longitude: a.centerCoordinate.longitude + (b.centerCoordinate.longitude - a.centerCoordinate.longitude) * t
+            )
+            camera.centerCoordinateDistance = a.centerCoordinateDistance
+                + (b.centerCoordinateDistance - a.centerCoordinateDistance) * t
+            // Shortest way round, e.g. 350° → 10° passes through north.
+            var turn = (b.heading - a.heading).truncatingRemainder(dividingBy: 360)
+            if turn > 180 { turn -= 360 } else if turn < -180 { turn += 360 }
+            camera.heading = Geo.normalized(a.heading + turn * t)
+            return camera
         }
 
         /// Pinch limits of 100 m – 20 km view width, as camera distances (distance is proportional to width).
@@ -249,7 +312,7 @@ struct TrackMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             // Measured once the camera has settled, not mid-animation.
-            if needsZoomRangeUpdate, !gestureActive {
+            if needsZoomRangeUpdate, !gestureActive, cameraAnimation == nil {
                 needsZoomRangeUpdate = false
                 updateZoomRange()
             }
