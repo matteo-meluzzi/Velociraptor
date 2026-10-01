@@ -13,14 +13,19 @@ struct TrackMapView: UIViewRepresentable {
     let insets: EdgeInsets
     let onVisibleAreaChanged: (VisibleArea) -> Void
     let onUserChangedCamera: (CLLocationCoordinate2D, Double) -> Void
+    let onInterfaceOrientationChanged: (UIInterfaceOrientation) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> TrackMapContainer {
         let container = TrackMapContainer()
         container.mapView.delegate = context.coordinator
-        container.onLayout = { [weak coordinator = context.coordinator] in coordinator?.sizeChanged() }
+        container.onLayout = { [weak coordinator = context.coordinator] in
+            coordinator?.sizeChanged()
+            coordinator?.checkInterfaceOrientation()
+        }
         context.coordinator.container = container
+        context.coordinator.observeDeviceRotation()
         return container
     }
 
@@ -39,6 +44,7 @@ struct TrackMapView: UIViewRepresentable {
         coordinator.lastInsets = insets
         coordinator.apply(viewport)
         if trackChanged || insetsChanged { coordinator.refreshVisibleArea() }
+        coordinator.checkInterfaceOrientation()
     }
 
     @MainActor
@@ -53,6 +59,7 @@ struct TrackMapView: UIViewRepresentable {
         private var casing: MKMultiPolyline?
         private var appliedViewport: Viewport?
         private var hasSetInitialRegion = false
+        private var interfaceOrientation: UIInterfaceOrientation = .unknown
 
         private var mapView: MKMapView? { container?.mapView }
 
@@ -80,6 +87,33 @@ struct TrackMapView: UIViewRepresentable {
                 mapView.addAnnotation(TrackEndpointAnnotation(kind: .finish, coordinate: track.finish.coordinate))
             }
             return true
+        }
+
+        private var rotationObserver: NSObjectProtocol?
+
+        /// A landscapeLeft ↔ landscapeRight flip keeps the map's size, so layout alone wouldn't notice it.
+        func observeDeviceRotation() {
+            rotationObserver = NotificationCenter.default.addObserver(
+                forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.checkInterfaceOrientation() }
+            }
+        }
+
+        deinit {
+            if let rotationObserver { NotificationCenter.default.removeObserver(rotationObserver) }
+        }
+
+        /// Reports screen rotations so the compass heading refers to the top of the screen; `.unknown` is ignored.
+        func checkInterfaceOrientation() {
+            guard let orientation = container?.window?.windowScene?.interfaceOrientation,
+                  orientation != .unknown, orientation != interfaceOrientation else { return }
+            interfaceOrientation = orientation
+            if isUpdating {
+                DispatchQueue.main.async { [parent] in parent?.onInterfaceOrientationChanged(orientation) }
+            } else {
+                parent?.onInterfaceOrientationChanged(orientation)
+            }
         }
 
         func sizeChanged() {

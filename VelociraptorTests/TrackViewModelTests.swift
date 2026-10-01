@@ -278,7 +278,59 @@ struct TrackViewModelTests {
     @Test func displayedMapHeadingFollowsTheMapNotTheTarget() async throws {
         let vm = try await northSouthViewModel()
         #expect(vm.displayedMapHeading == 0)
+        location.send(value: fix(start, kmh: 10, course: 90))
         vm.visibleAreaChanged(area(center: start, heading: 40))
+        #expect(vm.viewport.heading == 90)
         #expect(vm.displayedMapHeading == 40)
+    }
+
+    // MARK: V12 – orientation
+
+    @Test func movingTurnsTheViewToTheCourse() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start, kmh: 10, course: 90))
+        #expect(vm.viewport.heading == 90)
+    }
+
+    @Test func stationaryTurnsTheViewToTheCompass() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start, kmh: 10, course: 90))
+        location.send(value: fix(start, kmh: 1))
+        heading.send(CompassHeading(trueHeading: 200, magneticHeading: 198, accuracy: 5))
+        #expect(vm.viewport.heading == 200)
+    }
+
+    @Test func movingWithoutCourseKeepsHeading() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start, kmh: 10, course: 90))
+        location.send(value: fix(start, kmh: 10, course: -1))
+        #expect(vm.viewport.heading == 90)
+    }
+
+    @Test func invalidFixDoesNotStopMovingOrientation() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start, kmh: 10, course: 90))
+        heading.send(CompassHeading(trueHeading: 200, magneticHeading: 198, accuracy: 5))
+        location.send(value: fix(start, accuracy: -1, kmh: 0))
+        #expect(vm.viewport.heading == 90)
+    }
+
+    @Test func northUpUntilAHeadingIsKnown() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start, kmh: 10, course: -1))
+        #expect(vm.viewport.heading == 0)
+    }
+
+    @Test func orientationStillAppliesWhileBrowsing() async throws {
+        let vm = try await loadedViewModel()
+        vm.userChangedCamera(center: offset(start, metres: 500, bearing: 0), width: 3000)
+        location.send(value: fix(start, kmh: 10, course: 90))
+        #expect(vm.viewport.heading == 90)
+    }
+
+    @Test func interfaceOrientationIsPassedToTheCompass() {
+        let vm = makeViewModel()
+        vm.interfaceOrientationChanged(.landscapeLeft)
+        #expect(heading.lastOrientation == .landscapeLeft)
     }
 }

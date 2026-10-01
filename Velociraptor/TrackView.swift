@@ -15,9 +15,18 @@ struct TrackView: View {
                     viewport: viewModel.viewport,
                     insets: insets,
                     onVisibleAreaChanged: { viewModel.visibleAreaChanged($0) },
-                    onUserChangedCamera: { viewModel.userChangedCamera(center: $0, width: $1) }
+                    onUserChangedCamera: { viewModel.userChangedCamera(center: $0, width: $1) },
+                    onInterfaceOrientationChanged: { viewModel.interfaceOrientationChanged($0) }
                 )
                 .ignoresSafeArea()
+            }
+            if Geo.angularDistance(viewModel.displayedMapHeading, 0) >= 1 {
+                NorthIndicator(heading: viewModel.displayedMapHeading)
+                    .padding(.top, insets.top + 12)
+                    .padding(.leading, insets.leading + 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
             if let arrow = viewModel.arrow {
                 GeometryReader { proxy in
@@ -62,6 +71,30 @@ struct TrackView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trackLocationMessage")
+    }
+}
+
+/// Shows where north is while the map is rotated. Follows the map's actual heading frame by frame.
+private struct NorthIndicator: View {
+    let heading: Double
+
+    var body: some View {
+        ZStack {
+            Circle().fill(.regularMaterial)
+            VStack(spacing: 0) {
+                Text("N")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.red)
+                Image(systemName: "arrowtriangle.up.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
+            }
+            .rotationEffect(.degrees(-heading))
+        }
+        .frame(width: 40, height: 40)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("North indicator")
+        .accessibilityIdentifier("northIndicator")
     }
 }
 

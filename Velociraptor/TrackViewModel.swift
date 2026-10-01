@@ -1,6 +1,7 @@
 import Combine
 import CoreLocation
 import Foundation
+import UIKit
 
 enum TrackViewMode {
     case following, browsing
@@ -48,6 +49,8 @@ final class TrackViewModel: ObservableObject {
     private var visibleArea: VisibleArea?
     /// Nearest-position result for the current fix and track; recomputed per fix, not per frame.
     private var cachedNearest: (fix: LocationFix, arrow: OffTrackArrow)?
+    private var orientation = OrientationController()
+    private var latestCompass: CompassHeading?
 
     init(
         location: any LocationProviding<LocationFix?>,
@@ -64,6 +67,12 @@ final class TrackViewModel: ObservableObject {
             .store(in: &cancellables)
         authorization.publisher
             .sink { [weak self] in self?.authorizationChanged($0) }
+            .store(in: &cancellables)
+        heading.publisher
+            .sink { [weak self] in
+                self?.latestCompass = $0
+                self?.updateOrientation()
+            }
             .store(in: &cancellables)
     }
 
@@ -115,6 +124,11 @@ final class TrackViewModel: ObservableObject {
 
     func userChangedCamera(center: CLLocationCoordinate2D, width: Double) {}
 
+    /// Tells the compass which way the screen is turned, so its heading refers to the top of the screen.
+    func interfaceOrientationChanged(_ orientation: UIInterfaceOrientation) {
+        heading.setInterfaceOrientation(orientation)
+    }
+
     func visibleAreaChanged(_ area: VisibleArea) {
         visibleArea = area
         assign(\.displayedMapHeading, area.viewport.heading)
@@ -130,6 +144,7 @@ final class TrackViewModel: ObservableObject {
             lastKnownCoordinate = fix.coordinate
             if mode == .following, !accessDenied { setCenter(fix.coordinate) }
         }
+        updateOrientation()
         updateLocationMessage()
         updateArrow()
     }
@@ -143,6 +158,15 @@ final class TrackViewModel: ObservableObject {
         if mode == .following, track != nil { setCenter(defaultCenter) }
         updateLocationMessage()
         updateArrow()
+    }
+
+    /// Travel direction while moving, compass while stationary (both modes).
+    private func updateOrientation() {
+        orientation.update(fix: userLocation, compass: latestCompass)
+        guard orientation.displayedHeading != viewport.heading else { return }
+        var updated = viewport
+        updated.heading = orientation.displayedHeading
+        assign(\.viewport, updated)
     }
 
     /// Arrow toward the nearest track position, from the real fix, when no part of the track is in view.
