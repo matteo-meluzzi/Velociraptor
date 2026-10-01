@@ -33,12 +33,16 @@ final class HeartRateViewModel: ObservableObject {
     @Published var isPickerPresented = false
     @Published var alertMessage: String?
 
+    var connectedMonitorID: UUID? {
+        if case .connected(let id, _) = state { id } else { nil }
+    }
+
     private let service: any HeartRateMonitorProviding
     private let now: () -> Date
     private var cancellables = Set<AnyCancellable>()
 
     private var availability: BluetoothAvailability = .notDetermined
-    private var state: MonitorConnectionState = .none
+    @Published private var state: MonitorConnectionState = .none
     private var reading: HeartRateReading?
     private var searchStartedAt: Date?
 
@@ -167,6 +171,78 @@ final class HeartRateViewModel: ObservableObject {
                 pickerMessage = .noneFound
             } else {
                 pickerMessage = .searching
+            }
+        }
+    }
+}
+
+struct HeartRateView: View {
+    @ObservedObject var viewModel: HeartRateViewModel
+
+    var body: some View {
+        if let text = viewModel.heartRateText {
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(text)
+                    .font(.system(size: 56, weight: .thin, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("heartRateValue")
+                if viewModel.showsUnit {
+                    Text("bpm")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("heartRateUnit")
+                }
+            }
+        }
+    }
+}
+
+struct MonitorPickerView: View {
+    @ObservedObject var viewModel: HeartRateViewModel
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(viewModel.monitors) { monitor in
+                    Button {
+                        viewModel.select(monitor)
+                    } label: {
+                        HStack {
+                            Text(monitor.name)
+                            Spacer()
+                            if viewModel.connectedMonitorID == monitor.id {
+                                Image(systemName: "checkmark")
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .accessibilityAddTraits(viewModel.connectedMonitorID == monitor.id ? .isSelected : [])
+                    .accessibilityIdentifier("monitorRow")
+                }
+                if let message = viewModel.pickerMessage {
+                    HStack(spacing: 12) {
+                        if message == .searching { ProgressView() }
+                        Text(message.text)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("monitorPickerMessage")
+                    }
+                    if message == .bluetoothDenied {
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                        }
+                        .accessibilityIdentifier("openSettingsButton")
+                    }
+                }
+            }
+            .navigationTitle("Heart rate monitors")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { viewModel.isPickerPresented = false }
+                }
             }
         }
     }
