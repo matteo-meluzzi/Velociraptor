@@ -20,13 +20,6 @@ struct SpeedBehavior: LocationBehavior {
     }
 }
 
-struct AltitudeBehavior: LocationBehavior {
-    var initialValue: Double? { nil }
-    func value(from location: CLLocation) -> Double? {
-        location.altitude
-    }
-}
-
 struct NilToZero : LocationBehavior {
     let inner: any LocationBehavior<Double?>
     
@@ -44,22 +37,6 @@ struct MetersPerSecondToKmh : LocationBehavior {
     
     func value(from location: CLLocation) -> Double {
         inner.value(from: location) * 3.6
-    }
-}
-
-typealias TimestampedValue<T> = (Date, T)
-
-struct Timestamped<T> : LocationBehavior {
-    let inner: any LocationBehavior<T>
-    
-    private func timestamp(_ value: T) -> TimestampedValue<T> {
-        return (Date(), value)
-    }
-    
-    var initialValue: TimestampedValue<T> { timestamp(inner.initialValue) }
-    
-    func value(from location: CLLocation) -> TimestampedValue<T> {
-        timestamp(inner.value(from: location))
     }
 }
 
