@@ -33,5 +33,5 @@ Note: unit tests use the newer Swift Testing framework (not XCTest), so test fun
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at `specs/003-gps-acceleration-plot/plan.md`.
+at `specs/004-ble-heart-rate-monitor/plan.md`.
 <!-- SPECKIT END -->
