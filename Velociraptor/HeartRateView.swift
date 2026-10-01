@@ -26,6 +26,7 @@ final class HeartRateViewModel: ObservableObject {
     static let searchDuration: TimeInterval = 5
 
     @Published private(set) var heartRateText: String?
+    @Published private(set) var heartRateBPM: Int?
     @Published private(set) var showsUnit = false
     @Published private(set) var buttonTitle = "Connect heart rate monitor"
     @Published private(set) var monitors: [DiscoveredMonitor] = []
@@ -138,6 +139,7 @@ final class HeartRateViewModel: ObservableObject {
     // MARK: - Derived presentation
 
     private func updateMonitorTexts() {
+        heartRateBPM = if case .connected = state { reading?.bpm } else { nil }
         switch state {
         case .none:
             heartRateText = nil
@@ -181,20 +183,123 @@ struct HeartRateView: View {
 
     var body: some View {
         if let text = viewModel.heartRateText {
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Text(text)
-                    .font(.system(size: 56, weight: .thin, design: .rounded))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .accessibilityIdentifier("heartRateValue")
-                if viewModel.showsUnit {
-                    Text("bpm")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("heartRateUnit")
+            HeartRateDisplay(text: text, bpm: viewModel.heartRateBPM, showsUnit: viewModel.showsUnit)
+        }
+    }
+}
+
+struct HeartRateDisplay: View {
+    let text: String
+    let bpm: Int?
+    let showsUnit: Bool
+
+    var body: some View {
+        Group {
+            if showsUnit {
+                ZStack {
+                    HeartRateGauge(bpm: bpm)
+                    VStack(spacing: 0) {
+                        valueText(text)
+                        Text("bpm")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("heartRateUnit")
+                    }
+                    .padding(40)
                 }
+                .frame(maxWidth: 320, maxHeight: 320)
+                .aspectRatio(1, contentMode: .fit)
+                .padding(.horizontal)
+            } else {
+                valueText(text)
             }
+        }
+    }
+
+    private func valueText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 120, weight: .thin, design: .rounded))
+            .monospacedDigit()
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+            .accessibilityIdentifier("heartRateValue")
+    }
+}
+
+/// Garmin-style ring of five colored zone arcs with a marker at the current heart rate.
+struct HeartRateGauge: View {
+    let bpm: Int?
+    var zones = HeartRateZones()
+
+    private static let colors: [Color] = [.gray, .blue, .green, .orange, .red]
+    /// SwiftUI angles: 0° is 3 o'clock, increasing clockwise. The gap is centered at 6 o'clock.
+    private static let startAngle = 130.0
+    private static let sweep = 280.0
+    private static let segmentGap = 4.0
+    private static let lineWidth: CGFloat = 10
+    private static let activeLineWidth: CGFloat = 18
+
+    var body: some View {
+        let activeZone = bpm.map(zones.zone(for:))
+        ZStack {
+            ForEach(0..<HeartRateZones.count, id: \.self) { index in
+                ZoneArc(index: index)
+                    .stroke(
+                        Self.colors[index],
+                        style: StrokeStyle(lineWidth: index == activeZone ? Self.activeLineWidth : Self.lineWidth)
+                    )
+                    .padding(Self.activeLineWidth / 2)
+            }
+            if let bpm {
+                GaugeMarker()
+                    .fill(.primary)
+                    .padding(Self.activeLineWidth + 4)
+                    .rotationEffect(.degrees(Self.startAngle + zones.position(for: bpm) * Self.sweep))
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: bpm)
+        .accessibilityHidden(true)
+    }
+
+    private struct ZoneArc: Shape {
+        let index: Int
+
+        func path(in rect: CGRect) -> Path {
+            let segment = HeartRateGauge.sweep / Double(HeartRateZones.count)
+            let start = HeartRateGauge.startAngle + Double(index) * segment + HeartRateGauge.segmentGap / 2
+            let end = start + segment - HeartRateGauge.segmentGap
+            var path = Path()
+            path.addArc(
+                center: CGPoint(x: rect.midX, y: rect.midY),
+                radius: min(rect.width, rect.height) / 2,
+                startAngle: .degrees(start),
+                endAngle: .degrees(end),
+                clockwise: false
+            )
+            return path
+        }
+    }
+
+    /// Triangle at the 3 o'clock edge pointing outward; rotated into place by the gauge.
+    private struct GaugeMarker: Shape {
+        func path(in rect: CGRect) -> Path {
+            let radius = min(rect.width, rect.height) / 2
+            let tipX = rect.midX + radius
+            let size: CGFloat = 16
+            var path = Path()
+            path.move(to: CGPoint(x: tipX, y: rect.midY))
+            path.addLine(to: CGPoint(x: tipX - size, y: rect.midY - size * 0.6))
+            path.addLine(to: CGPoint(x: tipX - size, y: rect.midY + size * 0.6))
+            path.closeSubpath()
+            return path
+        }
+    }
+}
+
+#Preview("Zones") {
+    VStack {
+        ForEach([nil, 85, 106, 150, 185], id: \.self) { bpm in
+            HeartRateGauge(bpm: bpm).frame(width: 140, height: 140)
         }
     }
 }

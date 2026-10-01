@@ -68,6 +68,20 @@ struct HeartRateViewModelTests {
         #expect(viewModel.heartRateText == "75")
     }
 
+    @Test func bpmExposedOnlyForCurrentReading() {
+        #expect(viewModel.heartRateBPM == nil)
+        service.send(state: connectedState)
+        #expect(viewModel.heartRateBPM == nil)
+        service.send(measurement: measurement(106))
+        #expect(viewModel.heartRateBPM == 106)
+        clock.advance(6)
+        ticks.send(clock.now)
+        #expect(viewModel.heartRateBPM == nil)
+        service.send(measurement: measurement(110))
+        service.send(state: .lost(monitorID: monitorID, name: "Polar H10"))
+        #expect(viewModel.heartRateBPM == nil)
+    }
+
     @Test func lostShowsDash() {
         service.send(state: .lost(monitorID: monitorID, name: "Polar H10"))
         #expect(viewModel.heartRateText == "–")

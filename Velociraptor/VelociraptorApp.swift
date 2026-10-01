@@ -10,10 +10,10 @@ struct ContentView : View {
     var body: some View {
         VStack(spacing: 8) {
             Spacer()
+            HeartRateView(viewModel: heartRateViewModel)
             SpeedView(viewModel: speedViewModel)
                 .fixedSize()
                 .layoutPriority(1)
-            HeartRateView(viewModel: heartRateViewModel)
             LocationStatusView(viewModel: locationStatusViewModel)
             Spacer()
             Button(heartRateViewModel.buttonTitle) { heartRateViewModel.connectButtonTapped() }
@@ -124,6 +124,15 @@ final class PreviewHeartRateService: HeartRateMonitorProviding {
         return service
     }
 
+    /// Shifts the reading by `delta` bpm, connecting first if needed so the reading is shown.
+    func changeBPM(by delta: Int) {
+        if case .connected = stateSubject.value {} else {
+            stateSubject.send(.connected(monitorID: id, name: "Polar H10"))
+        }
+        let bpm = (measurementSubject.value?.bpm ?? 100) + delta
+        measurementSubject.send(HeartRateMeasurement(bpm: bpm, contact: .detected))
+    }
+
     func cycleState() {
         switch stateSubject.value {
         case .none: stateSubject.send(.connecting(monitorID: id, name: "Polar H10", origin: .user))
@@ -147,20 +156,23 @@ final class PreviewHeartRateService: HeartRateMonitorProviding {
         )
         
         VStack {
-            Button {
-                speedModel.send(value: speed)
-                speed += 1
-            } label: {
-                Text("accelerate")
+            HStack {
+                Button("decelerate") {
+                    speed -= 1
+                    speedModel.send(value: speed)
+                }
+                Button("accelerate") {
+                    speed += 1
+                    speedModel.send(value: speed)
+                }
             }
-            Button {
-                speedModel.send(value: speed)
-                speed -= 1
-            } label: {
-                Text("decelerate")
+            HStack {
+                Button("decrease bpm") { heartRateService.changeBPM(by: -5) }
+                Button("increase bpm") { heartRateService.changeBPM(by: 5) }
             }
             Button("cycle heart rate state") { heartRateService.cycleState() }
         }
+        .buttonStyle(.bordered)
     }
 }
 
