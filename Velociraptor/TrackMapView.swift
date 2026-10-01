@@ -10,6 +10,7 @@ struct TrackMapView: UIViewRepresentable {
     let track: Track
     let geometry: TrackGeometry
     let viewport: Viewport
+    let mode: TrackViewMode
     let insets: EdgeInsets
     let onVisibleAreaChanged: (VisibleArea) -> Void
     let onUserChangedCamera: (CLLocationCoordinate2D, Double) -> Void
@@ -40,6 +41,7 @@ struct TrackMapView: UIViewRepresentable {
         let margin = max(insets.top, insets.bottom)
         container.mapView.layoutMargins = UIEdgeInsets(top: margin, left: 0, bottom: margin, right: 0)
         let trackChanged = coordinator.show(track)
+        if trackChanged { coordinator.trackDidChange() }
         let insetsChanged = coordinator.lastInsets != insets
         coordinator.lastInsets = insets
         coordinator.apply(viewport)
@@ -60,6 +62,11 @@ struct TrackMapView: UIViewRepresentable {
         private var appliedViewport: Viewport?
         private var hasSetInitialRegion = false
         private var interfaceOrientation: UIInterfaceOrientation = .unknown
+        /// A user zoom/pan is in progress: the model is not applied until it ends (rule M1).
+        private var gestureActive = false
+        /// Set while this coordinator moves the camera, so those changes are never reported as the user's (M4).
+        private var applyingProgrammatically = false
+        private var needsZoomRangeUpdate = false
 
         private var mapView: MKMapView? { container?.mapView }
 
@@ -96,7 +103,8 @@ struct TrackMapView: UIViewRepresentable {
             rotationObserver = NotificationCenter.default.addObserver(
                 forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.checkInterfaceOrientation() }
+                // The scene's interface orientation can update after the device notification; check a turn later.
+                DispatchQueue.main.async { self?.checkInterfaceOrientation() }
             }
         }
 
@@ -116,15 +124,35 @@ struct TrackMapView: UIViewRepresentable {
             }
         }
 
+        /// A new track gets the default view anew, and the zoom range is re-measured at its latitude.
+        func trackDidChange() {
+            needsZoomRangeUpdate = true
+        }
+
         func sizeChanged() {
             guard let target = appliedViewport ?? parent?.viewport else { return }
             appliedViewport = nil
             apply(target, animated: false)
+            updateZoomRange()
         }
 
         func apply(_ viewport: Viewport, animated: Bool = true) {
-            guard let mapView, mapView.bounds.width > 0, mapView.bounds.height > 0,
-                  viewport != appliedViewport else { return }
+            guard let mapView else { return }
+            // A gesture whose last region change came while a finger was still down never got its end callback.
+            // Once the model is back to Following (Re-centre, import) clear it silently: reporting now could undo
+            // that change. While Browsing, wait — the map may still be decelerating from a fling.
+            if gestureActive, parent?.mode == .following, !isFingerDown(mapView) { gestureActive = false }
+            guard mapView.bounds.width > 0, mapView.bounds.height > 0,
+                  !gestureActive, viewport != appliedViewport else { return }
+            // M2: while browsing only the heading follows the model; the user's centre and zoom stay.
+            if parent?.mode == .browsing, hasSetInitialRegion {
+                appliedViewport = viewport
+                guard Geo.angularDistance(viewport.heading, mapView.camera.heading) >= 0.5 else { return }
+                let camera = mapView.camera.copy() as! MKMapCamera
+                camera.heading = viewport.heading
+                setCamera(camera, duration: animated ? 0.5 : 0)
+                return
+            }
             if !hasSetInitialRegion {
                 // Start near the right scale; the distance correction below then makes it exact.
                 hasSetInitialRegion = true
@@ -142,14 +170,56 @@ struct TrackMapView: UIViewRepresentable {
                 camera.centerCoordinateDistance = mapView.camera.centerCoordinateDistance * viewport.width / currentWidth
             }
             let headingChanged = Geo.angularDistance(viewport.heading, mapView.camera.heading) >= 0.5
+            let firstApplication = appliedViewport == nil
             appliedViewport = viewport
-            if animated {
-                UIView.animate(withDuration: headingChanged ? 0.5 : 0.25, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
+            setCamera(camera, duration: animated ? (headingChanged ? 0.5 : 0.25) : 0)
+            if firstApplication { updateZoomRange() }
+        }
+
+        private func setCamera(_ camera: MKMapCamera, duration: TimeInterval) {
+            guard let mapView else { return }
+            applyingProgrammatically = true
+            defer { applyingProgrammatically = false }
+            if duration > 0 {
+                UIView.animate(withDuration: duration, delay: 0, options: [.beginFromCurrentState, .curveEaseInOut]) {
                     mapView.camera = camera
                 }
             } else {
                 mapView.camera = camera
             }
+        }
+
+        /// Pinch limits of 100 m – 20 km view width, as camera distances (distance is proportional to width).
+        private func updateZoomRange() {
+            guard let mapView, let width = currentWidthInMetres(), width > 0 else { return }
+            let distancePerMetre = mapView.camera.centerCoordinateDistance / width
+            mapView.cameraZoomRange = MKMapView.CameraZoomRange(
+                minCenterCoordinateDistance: Viewport.minWidth * distancePerMetre,
+                maxCenterCoordinateDistance: Viewport.maxWidth * distancePerMetre
+            )
+        }
+
+        private var currentCenterAndWidth: (CLLocationCoordinate2D, Double)? {
+            guard let mapView, let width = currentWidthInMetres() else { return nil }
+            let center = mapView.convert(CGPoint(x: mapView.bounds.midX, y: mapView.bounds.midY), toCoordinateFrom: mapView)
+            return (center, width)
+        }
+
+        private func isFingerDown(_ mapView: MKMapView) -> Bool {
+            func active(_ view: UIView) -> Bool {
+                let down = view.gestureRecognizers?.contains { [.began, .changed].contains($0.state) } ?? false
+                return down || view.subviews.contains(where: active)
+            }
+            return active(mapView)
+        }
+
+        /// Whether a map gesture is driving this change: pan/pinch in progress, or a tap zoom just recognised.
+        private func isUserGesture(_ mapView: MKMapView) -> Bool {
+            func active(_ view: UIView) -> Bool {
+                let recognised = view.gestureRecognizers?.contains { [.began, .changed, .ended].contains($0.state) } ?? false
+                return recognised || view.subviews.contains(where: active)
+            }
+            return active(mapView)
         }
 
         /// Ground distance across the shorter side of the map, measured on the live map in map points.
@@ -169,6 +239,28 @@ struct TrackMapView: UIViewRepresentable {
         }
 
         // MARK: MKMapViewDelegate
+
+        func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            guard !applyingProgrammatically, !gestureActive, isUserGesture(mapView) else { return }
+            // M3: report at gesture start so "Re-centre" appears at once and following stops.
+            gestureActive = true
+            if let (center, width) = currentCenterAndWidth { parent?.onUserChangedCamera(center, width) }
+        }
+
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            // Measured once the camera has settled, not mid-animation.
+            if needsZoomRangeUpdate, !gestureActive {
+                needsZoomRangeUpdate = false
+                updateZoomRange()
+            }
+            // A cancelled animation can finish after the gesture started; wait until no finger is driving the map.
+            guard gestureActive, !isFingerDown(mapView) else { return }
+            gestureActive = false
+            // M3: report the final view, then resume applying the model (e.g. a heading that changed meanwhile).
+            if let (center, width) = currentCenterAndWidth { parent?.onUserChangedCamera(center, width) }
+            appliedViewport = nil
+            if let viewport = parent?.viewport { apply(viewport) }
+        }
 
         func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
             refreshVisibleArea()

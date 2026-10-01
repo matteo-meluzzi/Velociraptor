@@ -325,6 +325,7 @@ struct TrackViewModelTests {
         let vm = try await loadedViewModel()
         vm.userChangedCamera(center: offset(start, metres: 500, bearing: 0), width: 3000)
         location.send(value: fix(start, kmh: 10, course: 90))
+        #expect(vm.mode == .browsing)
         #expect(vm.viewport.heading == 90)
     }
 
@@ -332,5 +333,86 @@ struct TrackViewModelTests {
         let vm = makeViewModel()
         vm.interfaceOrientationChanged(.landscapeLeft)
         #expect(heading.lastOrientation == .landscapeLeft)
+    }
+
+    // MARK: V7, V8, V9, V11 – browsing and re-centre
+
+    @Test func userZoomOrPanSwitchesToBrowsing() async throws {
+        let vm = try await loadedViewModel()
+        let elsewhere = offset(start, metres: 800, bearing: 45)
+        vm.userChangedCamera(center: elsewhere, width: 3000)
+        #expect(vm.mode == .browsing)
+        #expect(vm.showsRecentreButton)
+        #expect(sameCoordinate(vm.viewport.center, elsewhere))
+        #expect(vm.viewport.width == 3000)
+    }
+
+    @Test func zoomOnlyAlsoSwitchesToBrowsing() async throws {
+        let vm = try await loadedViewModel()
+        vm.userChangedCamera(center: vm.viewport.center, width: 500)
+        #expect(vm.mode == .browsing)
+        #expect(vm.viewport.width == 500)
+    }
+
+    @Test(arguments: [(50.0, 100.0), (50_000.0, 20_000.0)])
+    func zoomIsClamped(requested: Double, expected: Double) async throws {
+        let vm = try await loadedViewModel()
+        vm.userChangedCamera(center: start, width: requested)
+        #expect(vm.viewport.width == expected)
+    }
+
+    @Test func browsingIgnoresNewFixesForCentring() async throws {
+        let vm = try await loadedViewModel()
+        let elsewhere = offset(start, metres: 800, bearing: 45)
+        vm.userChangedCamera(center: elsewhere, width: 3000)
+        let here = offset(start, metres: 100, bearing: 0)
+        location.send(value: fix(here))
+        #expect(sameCoordinate(vm.viewport.center, elsewhere))
+        #expect(vm.userLocation?.coordinate.latitude == here.latitude)
+    }
+
+    @Test func recentreRestoresDefaultViewOnTheUser() async throws {
+        let vm = try await loadedViewModel()
+        let here = offset(start, metres: 100, bearing: 0)
+        location.send(value: fix(here))
+        vm.userChangedCamera(center: offset(start, metres: 800, bearing: 45), width: 3000)
+        vm.recentreTapped()
+        #expect(vm.mode == .following)
+        #expect(!vm.showsRecentreButton)
+        #expect(vm.viewport.width == 1000)
+        #expect(sameCoordinate(vm.viewport.center, here))
+    }
+
+    @Test func recentreWithoutAnyFixGoesToTrackStart() async throws {
+        let vm = try await loadedViewModel()
+        vm.userChangedCamera(center: offset(start, metres: 800, bearing: 45), width: 3000)
+        vm.recentreTapped()
+        #expect(sameCoordinate(vm.viewport.center, start))
+    }
+
+    @Test func recentreAfterLocationLostGoesToLastFix() async throws {
+        let vm = try await loadedViewModel()
+        let here = offset(start, metres: 100, bearing: 0)
+        location.send(value: fix(here))
+        location.send(value: nil)
+        vm.userChangedCamera(center: offset(start, metres: 800, bearing: 45), width: 3000)
+        vm.recentreTapped()
+        #expect(sameCoordinate(vm.viewport.center, here))
+    }
+
+    @Test func firstFixWhileBrowsingDoesNotMoveTheView() async throws {
+        let vm = try await loadedViewModel()
+        let elsewhere = offset(start, metres: 800, bearing: 45)
+        vm.userChangedCamera(center: elsewhere, width: 3000)
+        location.send(value: fix(offset(start, metres: 100, bearing: 0)))
+        #expect(sameCoordinate(vm.viewport.center, elsewhere))
+    }
+
+    @Test func importWhileBrowsingReturnsToFollowing() async throws {
+        let vm = try await loadedViewModel()
+        vm.userChangedCamera(center: offset(start, metres: 800, bearing: 45), width: 3000)
+        await vm.importFile(at: try file(simpleGPX))
+        #expect(vm.mode == .following)
+        #expect(vm.viewport.width == 1000)
     }
 }

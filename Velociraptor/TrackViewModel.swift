@@ -120,9 +120,16 @@ final class TrackViewModel: ObservableObject {
         store.clear()
     }
 
-    func recentreTapped() {}
+    func recentreTapped() {
+        assign(\.mode, .following)
+        assign(\.viewport, Viewport(center: defaultCenter, width: Viewport.defaultWidth, heading: viewport.heading))
+    }
 
-    func userChangedCamera(center: CLLocationCoordinate2D, width: Double) {}
+    /// The user zoomed or panned: stop following and keep the view they chose.
+    func userChangedCamera(center: CLLocationCoordinate2D, width: Double) {
+        assign(\.mode, .browsing)
+        assign(\.viewport, Viewport(center: center, width: Viewport.clampedWidth(width), heading: viewport.heading))
+    }
 
     /// Tells the compass which way the screen is turned, so its heading refers to the top of the screen.
     func interfaceOrientationChanged(_ orientation: UIInterfaceOrientation) {

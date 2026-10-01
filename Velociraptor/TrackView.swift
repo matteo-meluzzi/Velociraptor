@@ -13,6 +13,7 @@ struct TrackView: View {
                     track: track,
                     geometry: geometry,
                     viewport: viewModel.viewport,
+                    mode: viewModel.mode,
                     insets: insets,
                     onVisibleAreaChanged: { viewModel.visibleAreaChanged($0) },
                     onUserChangedCamera: { viewModel.userChangedCamera(center: $0, width: $1) },
@@ -41,6 +42,16 @@ struct TrackView: View {
                 }
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+            }
+            if viewModel.showsRecentreButton {
+                Button { viewModel.recentreTapped() } label: {
+                    Label("Re-centre", systemImage: "location.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("recentreButton")
+                .padding(.bottom, insets.bottom + 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .ignoresSafeArea()
             }
             if let message = viewModel.locationMessage {
                 locationMessage(message)
