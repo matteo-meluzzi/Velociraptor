@@ -399,6 +399,7 @@
 				DEVELOPMENT_TEAM = F6SR5T5Q4W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Velociraptor-Info.plist";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Velociraptor uses Bluetooth to connect to your heart rate monitor.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Velociraptor uses your location to display your current GPS speed.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -431,6 +432,7 @@
 				DEVELOPMENT_TEAM = F6SR5T5Q4W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Velociraptor-Info.plist";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Velociraptor uses Bluetooth to connect to your heart rate monitor.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Velociraptor uses your location to display your current GPS speed.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
