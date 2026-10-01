@@ -6,8 +6,62 @@ struct ContentView : View {
     @ObservedObject var speedViewModel: OneValueModel
     @ObservedObject var locationStatusViewModel: LocationStatusViewModel
     @ObservedObject var heartRateViewModel: HeartRateViewModel
+    @ObservedObject var trackViewModel: TrackViewModel
+
+    @State private var topPanelBottom: CGFloat = 0
+    @State private var bottomBarTop: CGFloat = 0
+    @State private var screenBottom: CGFloat = 0
 
     var body: some View {
+        Group {
+            if trackViewModel.track != nil {
+                trackLayout
+            } else {
+                speedLayout
+            }
+        }
+        .fileImporter(
+            isPresented: $trackViewModel.isImporterPresented,
+            allowedContentTypes: [.gpx],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first { Task { await trackViewModel.importFile(at: url) } }
+            case .failure:
+                trackViewModel.importFailed()
+            }
+        }
+        .alert(
+            trackViewModel.alertMessage ?? "",
+            isPresented: Binding(
+                get: { trackViewModel.alertMessage != nil },
+                set: { if !$0 { trackViewModel.alertMessage = nil } }
+            )
+        ) {
+            Button("OK") { trackViewModel.alertMessage = nil }
+        } message: {
+            Text("The file is not a GPX track or has no track points.")
+        }
+        .sheet(isPresented: $heartRateViewModel.isPickerPresented, onDismiss: heartRateViewModel.pickerDismissed) {
+            MonitorPickerView(viewModel: heartRateViewModel)
+                .presentationDetents([.medium, .large])
+        }
+        .background {
+            Color.clear.alert(
+                heartRateViewModel.alertMessage ?? "",
+                isPresented: Binding(
+                    get: { heartRateViewModel.alertMessage != nil },
+                    set: { if !$0 { heartRateViewModel.alertMessage = nil } }
+                )
+            ) {
+                Button("OK") { heartRateViewModel.alertMessage = nil }
+            }
+        }
+    }
+
+    /// The speed screen as in feature 004, plus the import button.
+    private var speedLayout: some View {
         VStack(spacing: 8) {
             Spacer()
             HeartRateView(viewModel: heartRateViewModel)
@@ -16,25 +70,82 @@ struct ContentView : View {
                 .layoutPriority(1)
             LocationStatusView(viewModel: locationStatusViewModel)
             Spacer()
-            Button(heartRateViewModel.buttonTitle) { heartRateViewModel.connectButtonTapped() }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("heartRateMonitorButton")
-                .padding(.bottom)
+            ViewThatFits(in: .horizontal) {
+                HStack { heartRateButton; importButton }
+                VStack { heartRateButton; importButton }
+            }
+            .labelStyle(.titleOnly)
+            .padding(.horizontal)
+            .padding(.bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $heartRateViewModel.isPickerPresented, onDismiss: heartRateViewModel.pickerDismissed) {
-            MonitorPickerView(viewModel: heartRateViewModel)
-                .presentationDetents([.medium, .large])
-        }
-        .alert(
-            heartRateViewModel.alertMessage ?? "",
-            isPresented: Binding(
-                get: { heartRateViewModel.alertMessage != nil },
-                set: { if !$0 { heartRateViewModel.alertMessage = nil } }
+    }
+
+    /// Full-screen track map with compact speed and heart rate on top (FR-009).
+    private var trackLayout: some View {
+        ZStack {
+            TrackView(
+                viewModel: trackViewModel,
+                insets: EdgeInsets(top: topPanelBottom, leading: 0, bottom: max(0, screenBottom - bottomBarTop), trailing: 0)
             )
-        ) {
-            Button("OK") { heartRateViewModel.alertMessage = nil }
+
+            VStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 16) {
+                    SpeedView(viewModel: speedViewModel, compact: true)
+                        .fixedSize()
+                    HeartRateView(viewModel: heartRateViewModel, compact: true)
+                    LocationStatusView(viewModel: locationStatusViewModel)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial, ignoresSafeAreaEdges: .top)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topPanelBottom = $0 }
+
+                Spacer()
+
+                ViewThatFits(in: .horizontal) {
+                    HStack { importButton; heartRateButton; closeTrackButton }
+                        .labelStyle(.titleOnly)
+                    HStack { importButton; heartRateButton; closeTrackButton }
+                        .labelStyle(.iconOnly)
+                }
+                .controlSize(.small)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial, ignoresSafeAreaEdges: .bottom)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { bottomBarTop = $0 }
+            }
         }
+        // The map spans the whole screen, so the bottom inset is measured from the screen's bottom edge.
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY + $0.safeAreaInsets.bottom } action: {
+            screenBottom = $0
+        }
+    }
+
+    private var heartRateButton: some View {
+        Button { heartRateViewModel.connectButtonTapped() } label: {
+            Label(heartRateViewModel.buttonTitle, systemImage: "heart")
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("heartRateMonitorButton")
+    }
+
+    private var importButton: some View {
+        Button { trackViewModel.importButtonTapped() } label: {
+            Label("Import GPX track", systemImage: "square.and.arrow.down")
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("importTrackButton")
+    }
+
+    private var closeTrackButton: some View {
+        Button(role: .destructive) { trackViewModel.closeTrack() } label: {
+            Label("Close track", systemImage: "xmark")
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("closeTrackButton")
     }
 }
 
@@ -43,12 +154,19 @@ struct VelociraptorApp: App {
     @StateObject private var speedViewModel: OneValueModel
     @StateObject private var locationStatusViewModel: LocationStatusViewModel
     @StateObject private var heartRateViewModel: HeartRateViewModel
+    @StateObject private var trackViewModel: TrackViewModel
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         _speedViewModel = StateObject(wrappedValue: OneValueModel(LocationPublisher(behavior: MetersPerSecondToKmh(inner: NilToZero(inner: SpeedBehavior())))))
         _locationStatusViewModel = StateObject(wrappedValue: LocationStatusViewModel(AuthorizationStatusPublisher()))
         _heartRateViewModel = StateObject(wrappedValue: HeartRateViewModel(service: BluetoothHeartRateService()))
+        _trackViewModel = StateObject(wrappedValue: TrackViewModel(
+            location: LocationPublisher(behavior: LocationFixBehavior()),
+            heading: CompassHeadingPublisher(),
+            authorization: AuthorizationStatusPublisher(),
+            store: FileTrackStore.applicationSupport
+        ))
         
         CLLocationManager().requestWhenInUseAuthorization()
     }
@@ -58,10 +176,16 @@ struct VelociraptorApp: App {
             ContentView(
                 speedViewModel: speedViewModel,
                 locationStatusViewModel: locationStatusViewModel,
-                heartRateViewModel: heartRateViewModel
+                heartRateViewModel: heartRateViewModel,
+                trackViewModel: trackViewModel
             )
+            .task { await trackViewModel.loadStoredTrack() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { heartRateViewModel.sceneBecameActive() }
+            }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                // Keep the screen on while the app is open (FR-024); normal auto-lock in the background.
+                UIApplication.shared.isIdleTimerDisabled = phase == .active
             }
         }
     }
@@ -144,6 +268,36 @@ final class PreviewHeartRateService: HeartRateMonitorProviding {
     }
 }
 
+final class PreviewHeadingProvider: HeadingProviding {
+    private let subject = CurrentValueSubject<CompassHeading?, Never>(nil)
+    var publisher: AnyPublisher<CompassHeading?, Never> { subject.eraseToAnyPublisher() }
+    func setInterfaceOrientation(_ orientation: UIInterfaceOrientation) {}
+}
+
+@MainActor
+private func previewTrackViewModel(
+    trackAround center: CLLocationCoordinate2D? = nil,
+    location: MockLocationProvider<LocationFix?> = MockLocationProvider(initialValue: nil)
+) -> TrackViewModel {
+    let store = FileTrackStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+    if let center {
+        // Three segments heading north-east past `center`, with a gap between them.
+        let segments = (0..<3).map { s in
+            TrackSegment(points: (0..<20).map { i in
+                let step = Double(s * 22 + i) - 30
+                return TrackPoint(latitude: center.latitude + step * 0.0003, longitude: center.longitude + step * 0.0002)
+            })
+        }
+        try? store.save(Track(name: "Preview loop", segments: segments))
+    }
+    return TrackViewModel(
+        location: location,
+        heading: PreviewHeadingProvider(),
+        authorization: MockAuthorizationProvider(status: .authorizedAlways),
+        store: store
+    )
+}
+
 #Preview {
     let speedModel = MockLocationProvider(initialValue: 0.0)
     var speed = 0.0
@@ -152,7 +306,8 @@ final class PreviewHeartRateService: HeartRateMonitorProviding {
         ContentView(
             speedViewModel: OneValueModel(speedModel),
             locationStatusViewModel: LocationStatusViewModel(MockAuthorizationProvider(status: .authorizedAlways)),
-            heartRateViewModel: HeartRateViewModel(service: heartRateService)
+            heartRateViewModel: HeartRateViewModel(service: heartRateService),
+            trackViewModel: previewTrackViewModel()
         )
         
         VStack {
@@ -181,6 +336,22 @@ final class PreviewHeartRateService: HeartRateMonitorProviding {
     ContentView(
         speedViewModel: OneValueModel(MockLocationProvider(initialValue: 188.8)),
         locationStatusViewModel: LocationStatusViewModel(MockAuthorizationProvider(status: .authorizedAlways)),
-        heartRateViewModel: HeartRateViewModel(service: heartRateService)
+        heartRateViewModel: HeartRateViewModel(service: heartRateService),
+        trackViewModel: previewTrackViewModel()
     )
+}
+
+#Preview("Track loaded") {
+    let here = CLLocationCoordinate2D(latitude: 45.0703, longitude: 7.6869)
+    let location = MockLocationProvider<LocationFix?>(initialValue: LocationFix(
+        coordinate: here, horizontalAccuracy: 8, speed: 3, course: 30
+    ))
+    let trackViewModel = previewTrackViewModel(trackAround: here, location: location)
+    ContentView(
+        speedViewModel: OneValueModel(MockLocationProvider(initialValue: 10.8)),
+        locationStatusViewModel: LocationStatusViewModel(MockAuthorizationProvider(status: .authorizedAlways)),
+        heartRateViewModel: HeartRateViewModel(service: PreviewHeartRateService.connected(bpm: 151)),
+        trackViewModel: trackViewModel
+    )
+    .task { await trackViewModel.loadStoredTrack() }
 }

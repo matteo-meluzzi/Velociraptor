@@ -1,0 +1,193 @@
+import CoreLocation
+import Foundation
+import Testing
+@testable import Velociraptor
+
+@MainActor
+struct TrackViewModelTests {
+    private let location = MockLocationProvider<LocationFix?>(initialValue: nil)
+    private let heading = MockHeadingProvider()
+    private let authorization = MockAuthorizationProvider(status: .authorizedWhenInUse)
+    private let directory = makeTempDirectory()
+
+    private let start = CLLocationCoordinate2D(latitude: 45, longitude: 7)
+    private var simpleGPX: String {
+        gpx11(#"<trk><name>Simple</name><trkseg><trkpt lat="45" lon="7"/><trkpt lat="45.01" lon="7"/></trkseg></trk>"#)
+    }
+
+    private func makeViewModel() -> TrackViewModel {
+        TrackViewModel(
+            location: location, heading: heading, authorization: authorization,
+            store: FileTrackStore(directory: directory)
+        )
+    }
+
+    private func file(_ contents: String, named name: String = "track.gpx") throws -> URL {
+        let url = makeTempDirectory().appendingPathComponent(name)
+        try Data(contents.utf8).write(to: url)
+        return url
+    }
+
+    private func loadedViewModel() async throws -> TrackViewModel {
+        let vm = makeViewModel()
+        await vm.importFile(at: try file(simpleGPX))
+        return vm
+    }
+
+    private func sameCoordinate(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Bool {
+        abs(a.latitude - b.latitude) < 1e-9 && abs(a.longitude - b.longitude) < 1e-9
+    }
+
+    // MARK: V1 – relaunch
+
+    @Test func storedTrackIsShownAfterLoading() async throws {
+        try FileTrackStore(directory: directory).save(makeTrack([[(45, 7), (45.01, 7)]], name: "Stored"))
+        let vm = makeViewModel()
+        await vm.loadStoredTrack()
+        #expect(vm.track?.name == "Stored")
+        #expect(vm.mode == .following)
+        #expect(vm.viewport.width == 1000)
+    }
+
+    @Test func nothingShownWhenStoreIsEmpty() async {
+        let vm = makeViewModel()
+        await vm.loadStoredTrack()
+        #expect(vm.track == nil)
+        #expect(vm.alertMessage == nil)
+    }
+
+    @Test func unreadableStoredTrackShowsNothingAndNoAlert() async throws {
+        try Data("garbage".utf8).write(to: directory.appendingPathComponent("CurrentTrack.json"))
+        let vm = makeViewModel()
+        await vm.loadStoredTrack()
+        #expect(vm.track == nil)
+        #expect(vm.alertMessage == nil)
+    }
+
+    // MARK: V2, V3, V5 – import and close
+
+    @Test func importButtonOpensPicker() {
+        let vm = makeViewModel()
+        vm.importButtonTapped()
+        #expect(vm.isImporterPresented)
+    }
+
+    @Test func validImportShowsTrackAndIsRemembered() async throws {
+        let vm = try await loadedViewModel()
+        #expect(vm.track?.name == "Simple")
+        #expect(vm.geometry != nil)
+        #expect(vm.mode == .following)
+        #expect(vm.viewport.width == 1000)
+
+        let relaunched = makeViewModel()
+        await relaunched.loadStoredTrack()
+        #expect(relaunched.track?.name == "Simple")
+    }
+
+    @Test func invalidImportKeepsPreviousTrack() async throws {
+        let vm = try await loadedViewModel()
+        await vm.importFile(at: try file(gpx11(#"<wpt lat="1" lon="1"/>"#), named: "waypoints.gpx"))
+        #expect(vm.alertMessage == "Couldn't load waypoints.gpx")
+        #expect(vm.track?.name == "Simple")
+
+        let relaunched = makeViewModel()
+        await relaunched.loadStoredTrack()
+        #expect(relaunched.track?.name == "Simple")
+    }
+
+    @Test func missingFileShowsAlert() async {
+        let vm = makeViewModel()
+        await vm.importFile(at: makeTempDirectory().appendingPathComponent("gone.gpx"))
+        #expect(vm.alertMessage == "Couldn't load gone.gpx")
+        #expect(vm.track == nil)
+    }
+
+    @Test func pickerFailureShowsAlert() {
+        let vm = makeViewModel()
+        vm.importFailed()
+        #expect(vm.alertMessage == "Couldn't load the file")
+        #expect(vm.track == nil)
+    }
+
+    @Test func newImportReplacesTrack() async throws {
+        let vm = try await loadedViewModel()
+        await vm.importFile(at: try file(gpx11(#"<trk><name>Other</name><trkseg><trkpt lat="1" lon="1"/></trkseg></trk>"#)))
+        #expect(vm.track?.name == "Other")
+    }
+
+    @Test func closedTrackDoesNotComeBack() async throws {
+        let vm = try await loadedViewModel()
+        vm.closeTrack()
+        #expect(vm.track == nil)
+        #expect(vm.geometry == nil)
+
+        let relaunched = makeViewModel()
+        await relaunched.loadStoredTrack()
+        #expect(relaunched.track == nil)
+    }
+
+    // MARK: V6, V10, V11, V15 – following and location
+
+    @Test func followingCentresOnEachFix() async throws {
+        let vm = try await loadedViewModel()
+        let here = CLLocationCoordinate2D(latitude: 45.003, longitude: 7.001)
+        location.send(value: fix(here))
+        #expect(sameCoordinate(vm.viewport.center, here))
+        #expect(vm.viewport.width == 1000)
+        #expect(vm.userLocation?.coordinate.latitude == here.latitude)
+    }
+
+    @Test func centresOnTrackStartUntilFirstFix() async throws {
+        let vm = try await loadedViewModel()
+        #expect(sameCoordinate(vm.viewport.center, start))
+        #expect(vm.locationMessage == .unknown)
+        #expect(vm.arrow == nil)
+
+        let here = CLLocationCoordinate2D(latitude: 45.02, longitude: 7.02)
+        location.send(value: fix(here))
+        #expect(sameCoordinate(vm.viewport.center, here))
+        #expect(vm.locationMessage == nil)
+    }
+
+    @Test func deniedAccessCentresOnTrackStartWithMessage() async throws {
+        authorization.send(.denied)
+        let vm = try await loadedViewModel()
+        #expect(sameCoordinate(vm.viewport.center, start))
+        #expect(vm.locationMessage == .denied)
+    }
+
+    @Test func lostLocationKeepsLastCentre() async throws {
+        let vm = try await loadedViewModel()
+        let here = CLLocationCoordinate2D(latitude: 45.02, longitude: 7.02)
+        location.send(value: fix(here))
+        location.send(value: nil)
+        #expect(sameCoordinate(vm.viewport.center, here))
+        #expect(vm.locationMessage == .unknown)
+        #expect(vm.userLocation == nil)
+    }
+
+    @Test func messageClearsWhenLocationRecovers() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(CLLocationCoordinate2D(latitude: 45.02, longitude: 7.02)))
+        location.send(value: nil)
+        location.send(value: fix(CLLocationCoordinate2D(latitude: 45.03, longitude: 7.02)))
+        #expect(vm.locationMessage == nil)
+    }
+
+    @Test func fixWithInvalidAccuracyIsIgnored() async throws {
+        let vm = try await loadedViewModel()
+        let here = CLLocationCoordinate2D(latitude: 45.02, longitude: 7.02)
+        location.send(value: fix(here))
+        location.send(value: fix(CLLocationCoordinate2D(latitude: 46, longitude: 8), accuracy: -1))
+        #expect(sameCoordinate(vm.viewport.center, here))
+        #expect(vm.userLocation?.coordinate.latitude == here.latitude)
+        #expect(vm.locationMessage == nil)
+    }
+
+    @Test func fixReceivedBeforeImportCentresTheNewTrackOnTheUser() async throws {
+        let here = CLLocationCoordinate2D(latitude: 45.02, longitude: 7.02)
+        location.send(value: fix(here))
+        let vm = try await loadedViewModel()
+        #expect(sameCoordinate(vm.viewport.center, here))
+    }
+}

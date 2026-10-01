@@ -1,6 +1,6 @@
 import Foundation
 
-protocol TrackStoring {
+protocol TrackStoring: Sendable {
     /// `nil` when nothing is stored or the stored track cannot be read (the unreadable file is removed).
     func load() -> Track?
     func save(_ track: Track) throws

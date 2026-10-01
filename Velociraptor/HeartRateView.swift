@@ -180,10 +180,12 @@ final class HeartRateViewModel: ObservableObject {
 
 struct HeartRateView: View {
     @ObservedObject var viewModel: HeartRateViewModel
+    /// Smaller size used over the track map.
+    var compact = false
 
     var body: some View {
         if let text = viewModel.heartRateText {
-            HeartRateDisplay(text: text, bpm: viewModel.heartRateBPM, showsUnit: viewModel.showsUnit)
+            HeartRateDisplay(text: text, bpm: viewModel.heartRateBPM, showsUnit: viewModel.showsUnit, compact: compact)
         }
     }
 }
@@ -192,24 +194,25 @@ struct HeartRateDisplay: View {
     let text: String
     let bpm: Int?
     let showsUnit: Bool
+    var compact = false
 
     var body: some View {
         Group {
             if showsUnit {
                 ZStack {
-                    HeartRateGauge(bpm: bpm)
+                    HeartRateGauge(bpm: bpm, scale: compact ? 0.4 : 1)
                     VStack(spacing: 0) {
                         valueText(text)
                         Text("bpm")
-                            .font(.title2)
+                            .font(compact ? .caption2 : .title2)
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("heartRateUnit")
                     }
-                    .padding(40)
+                    .padding(compact ? 14 : 40)
                 }
-                .frame(maxWidth: 320, maxHeight: 320)
+                .frame(maxWidth: compact ? 72 : 320, maxHeight: compact ? 72 : 320)
                 .aspectRatio(1, contentMode: .fit)
-                .padding(.horizontal)
+                .padding(.horizontal, compact ? 0 : nil)
             } else {
                 valueText(text)
             }
@@ -218,7 +221,7 @@ struct HeartRateDisplay: View {
 
     private func valueText(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 120, weight: .thin, design: .rounded))
+            .font(.system(size: compact ? 24 : 120, weight: compact ? .regular : .thin, design: .rounded))
             .monospacedDigit()
             .minimumScaleFactor(0.5)
             .lineLimit(1)
@@ -230,6 +233,8 @@ struct HeartRateDisplay: View {
 struct HeartRateGauge: View {
     let bpm: Int?
     var zones = HeartRateZones()
+    /// Scales strokes and marker for small gauges.
+    var scale: CGFloat = 1
 
     private static let colors: [Color] = [.gray, .blue, .green, .orange, .red]
     /// SwiftUI angles: 0° is 3 o'clock, increasing clockwise. The gap is centered at 6 o'clock.
@@ -246,14 +251,14 @@ struct HeartRateGauge: View {
                 ZoneArc(index: index)
                     .stroke(
                         Self.colors[index],
-                        style: StrokeStyle(lineWidth: index == activeZone ? Self.activeLineWidth : Self.lineWidth)
+                        style: StrokeStyle(lineWidth: (index == activeZone ? Self.activeLineWidth : Self.lineWidth) * scale)
                     )
-                    .padding(Self.activeLineWidth / 2)
+                    .padding(Self.activeLineWidth * scale / 2)
             }
             if let bpm {
-                GaugeMarker()
+                GaugeMarker(size: 16 * scale)
                     .fill(.primary)
-                    .padding(Self.activeLineWidth + 4)
+                    .padding((Self.activeLineWidth + 4) * scale)
                     .rotationEffect(.degrees(Self.startAngle + zones.position(for: bpm) * Self.sweep))
             }
         }
@@ -282,10 +287,11 @@ struct HeartRateGauge: View {
 
     /// Triangle at the 3 o'clock edge pointing outward; rotated into place by the gauge.
     private struct GaugeMarker: Shape {
+        let size: CGFloat
+
         func path(in rect: CGRect) -> Path {
             let radius = min(rect.width, rect.height) / 2
             let tipX = rect.midX + radius
-            let size: CGFloat = 16
             var path = Path()
             path.move(to: CGPoint(x: tipX, y: rect.midY))
             path.addLine(to: CGPoint(x: tipX - size, y: rect.midY - size * 0.6))
