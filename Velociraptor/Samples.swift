@@ -38,7 +38,7 @@ final class OneValueModel: ObservableObject {
 
 @MainActor
 final class SamplesModel: ObservableObject {
-    @Published var altitudeSamples: [Sample] = []
+    @Published var samples: [Sample] = []
 
     private let locationProvider: any LocationProviding<TimestampedValue<Double>>
     private var cancellable: AnyCancellable?
@@ -48,8 +48,8 @@ final class SamplesModel: ObservableObject {
         cancellable = locationProvider.publisher
             .sink { [weak self] timestampedAltitude in
                 guard let self else { return }
-                altitudeSamples.append(Sample(index: altitudeSamples.count, date: timestampedAltitude.0, value: timestampedAltitude.1))
-                altitudeSamples = Array(altitudeSamples.drop(while: {
+                samples.append(Sample(index: samples.count, date: timestampedAltitude.0, value: timestampedAltitude.1))
+                samples = Array(samples.drop(while: {
                     timestampedAltitude.0.timeIntervalSince($0.date) > 60.0
                 }))
             }
@@ -57,18 +57,43 @@ final class SamplesModel: ObservableObject {
 }
 
 @MainActor
+final class SkipFirstSamplesModel: ObservableObject {
+    @Published var samples: [Sample] = []
+
+    private let samplesModel: SamplesModel
+    private var cancellable: AnyCancellable?
+    private var skipIndex: Int?
+    
+    init(_ samplesModel: SamplesModel) {
+        self.samplesModel = samplesModel
+        cancellable = samplesModel.$samples
+            .sink { [weak self] samples in
+                guard let self else { return }
+                guard let firstSample = samples.first else { return }
+                guard let skipIndex = self.skipIndex else {
+                    self.skipIndex = firstSample.id
+                    return
+                }
+                self.samples = samples.filter({ sample in
+                    sample.id != skipIndex
+                })
+            }
+    }
+}
+
+@MainActor
 final class FirstDerivativeSamplesModel: ObservableObject {
-    @Published var derivedSamples: [Sample] = []
+    @Published var samples: [Sample] = []
 
     private let samplesModel: SamplesModel
     private var cancellable: AnyCancellable?
     
     init(_ samplesModel: SamplesModel) {
         self.samplesModel = samplesModel
-        cancellable = samplesModel.$altitudeSamples
+        cancellable = samplesModel.$samples
             .sink { [weak self] timestampedSpeeds in
                 guard let self else { return }
-                derivedSamples = zip(timestampedSpeeds, timestampedSpeeds.dropFirst()).map { (prev, next) in
+                samples = zip(timestampedSpeeds, timestampedSpeeds.dropFirst()).map { (prev, next) in
                     return Sample(index: next.index, date: next.date, value: (next.value - prev.value) / (next.date.timeIntervalSince(prev.date)))
                 }
             }

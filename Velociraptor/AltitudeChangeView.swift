@@ -4,10 +4,10 @@ import SwiftUI
 import Charts
 
 struct AltitudeChangeView: View {
-    @ObservedObject var viewModel: SamplesModel
+    @ObservedObject var viewModel: SkipFirstSamplesModel
 
     var body: some View {
-        Chart(viewModel.altitudeSamples) { sample in
+        Chart(viewModel.samples) { sample in
             LineMark(x: .value("Time", sample.date), y: .value("Altitude", sample.value))
         }
     }

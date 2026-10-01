@@ -5,7 +5,7 @@ import Combine
 struct ContentView : View {
     @ObservedObject var speedViewModel: OneValueModel
     @ObservedObject var altitudeViewModel: OneValueModel
-    @ObservedObject var altitudeChangeViewModel: SamplesModel
+    @ObservedObject var altitudeChangeViewModel: SkipFirstSamplesModel
     @ObservedObject var locationStatusViewModel: LocationStatusViewModel
     @ObservedObject var accelerationViewModel: FirstDerivativeSamplesModel
 
@@ -27,14 +27,14 @@ struct ContentView : View {
 struct VelociraptorApp: App {
     @StateObject private var speedViewModel: OneValueModel
     @StateObject private var altitudeViewModel: OneValueModel
-    @StateObject private var altitudeChangeViewModel: SamplesModel
+    @StateObject private var altitudeChangeViewModel: SkipFirstSamplesModel
     @StateObject private var locationStatusViewModel: LocationStatusViewModel
     @StateObject private var accelerationViewModel: FirstDerivativeSamplesModel
 
     init() {
         _speedViewModel = StateObject(wrappedValue: OneValueModel(LocationPublisher(behavior: MetersPerSecondToKmh(inner: NilToZero(inner: SpeedBehavior())))))
         _altitudeViewModel = StateObject(wrappedValue: OneValueModel(LocationPublisher(behavior: NilToZero(inner: AltitudeBehavior()))))
-        _altitudeChangeViewModel = StateObject(wrappedValue: SamplesModel(LocationPublisher(behavior: Timestamped(inner: NilToZero(inner: AltitudeBehavior())))))
+        _altitudeChangeViewModel = StateObject(wrappedValue: SkipFirstSamplesModel(SamplesModel(LocationPublisher(behavior: Timestamped(inner: NilToZero(inner: AltitudeBehavior()))))))
         _locationStatusViewModel = StateObject(wrappedValue: LocationStatusViewModel(AuthorizationStatusPublisher()))
         _accelerationViewModel = StateObject(wrappedValue: FirstDerivativeSamplesModel(SamplesModel(LocationPublisher(behavior: Timestamped(inner: NilToZero(inner: SpeedBehavior()))))))
         
@@ -80,7 +80,7 @@ final class MockAuthorizationProvider: AuthorizationProviding {
     var speed = 0.0
     var altitude = 0.0
     VStack {
-        ContentView(speedViewModel: OneValueModel(speedModel), altitudeViewModel: OneValueModel(altitudeModel), altitudeChangeViewModel: SamplesModel(altitudeChangeModel), locationStatusViewModel: LocationStatusViewModel(MockAuthorizationProvider(status: .authorizedAlways)), accelerationViewModel: FirstDerivativeSamplesModel(SamplesModel(accelModel)))
+        ContentView(speedViewModel: OneValueModel(speedModel), altitudeViewModel: OneValueModel(altitudeModel), altitudeChangeViewModel: SkipFirstSamplesModel(SamplesModel(altitudeChangeModel)), locationStatusViewModel: LocationStatusViewModel(MockAuthorizationProvider(status: .authorizedAlways)), accelerationViewModel: FirstDerivativeSamplesModel(SamplesModel(accelModel)))
         
         HStack {
             VStack {
