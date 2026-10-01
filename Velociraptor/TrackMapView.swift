@@ -309,7 +309,7 @@ struct TrackMapView: UIViewRepresentable {
                 ?? MKAnnotationView(annotation: endpoint, reuseIdentifier: id)
             view.annotation = endpoint
             view.image = endpoint.kind.image
-            view.centerOffset = CGPoint(x: (view.image?.size.width ?? 0) / 2 - 4, y: -(view.image?.size.height ?? 0) / 2)
+            view.centerOffset = .zero
             view.displayPriority = .required
             view.accessibilityLabel = endpoint.kind.label
             return view
@@ -331,6 +331,12 @@ final class TrackMapContainer: UIView {
         mapView.isPitchEnabled = false
         mapView.showsCompass = false
         mapView.insetsLayoutMarginsFromSafeArea = false
+        // Muted roads without points of interest, so the purple track, chevrons and markers stand out (US5).
+        let configuration = MKStandardMapConfiguration(elevationStyle: .flat, emphasisStyle: .muted)
+        configuration.pointOfInterestFilter = .excludingAll
+        mapView.preferredConfiguration = configuration
+        // Plain background where no map data is available (offline, uncached area; FR-022).
+        mapView.backgroundColor = .secondarySystemBackground
         mapView.accessibilityIdentifier = "trackMap"
         chevronView.isUserInteractionEnabled = false
         addSubview(mapView)
@@ -398,15 +404,27 @@ final class TrackEndpointAnnotation: NSObject, MKAnnotation {
             }
         }
 
-        var image: UIImage? {
-            let configuration = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+        /// A white round badge with the coloured flag, drawn into a bitmap so the colours survive
+        /// MKAnnotationView's rendering and read on both light and dark maps.
+        var image: UIImage {
             let (name, color): (String, UIColor) = switch self {
             case .start: ("flag.fill", .systemGreen)
-            case .finish: ("flag.checkered", .label)
+            case .finish: ("flag.checkered", .black)
             case .startFinish: ("flag.2.crossed.fill", .systemGreen)
             }
-            return UIImage(systemName: name, withConfiguration: configuration)?
-                .withTintColor(color, renderingMode: .alwaysOriginal)
+            let size = CGSize(width: 32, height: 32)
+            let symbol = UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .bold))
+            return UIGraphicsImageRenderer(size: size).image { context in
+                let badge = CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)
+                UIColor.white.setFill()
+                context.cgContext.fillEllipse(in: badge)
+                UIColor(white: 0, alpha: 0.35).setStroke()
+                context.cgContext.setLineWidth(1)
+                context.cgContext.strokeEllipse(in: badge)
+                if let symbol = symbol?.withTintColor(color, renderingMode: .alwaysOriginal) {
+                    symbol.draw(at: CGPoint(x: (size.width - symbol.size.width) / 2, y: (size.height - symbol.size.height) / 2))
+                }
+            }
         }
     }
 
