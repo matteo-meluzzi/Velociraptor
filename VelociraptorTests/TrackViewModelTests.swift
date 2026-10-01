@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import SwiftUI
 import Testing
 @testable import Velociraptor
 
@@ -189,5 +190,95 @@ struct TrackViewModelTests {
         location.send(value: fix(here))
         let vm = try await loadedViewModel()
         #expect(sameCoordinate(vm.viewport.center, here))
+    }
+
+    // MARK: V13, V16, V17 – off-track arrow
+
+    /// A 6 km north-south track through `start`, and the visible area the map would report for `center`.
+    private func northSouthViewModel() async throws -> TrackViewModel {
+        let south = offset(start, metres: 3000, bearing: 180), north = offset(start, metres: 3000, bearing: 0)
+        let vm = makeViewModel()
+        await vm.importFile(at: try file(gpx11(
+            "<trk><trkseg><trkpt lat=\"\(south.latitude)\" lon=\"\(south.longitude)\"/><trkpt lat=\"\(north.latitude)\" lon=\"\(north.longitude)\"/></trkseg></trk>"
+        )))
+        return vm
+    }
+
+    private func area(center: CLLocationCoordinate2D, heading: Double = 0) -> VisibleArea {
+        VisibleArea(
+            mapSize: CGSize(width: 390, height: 844), insets: EdgeInsets(),
+            viewport: Viewport(center: center, width: 1000, heading: heading)
+        )
+    }
+
+    @Test func arrowPointsToTrackWhenOutOfView() async throws {
+        let vm = try await northSouthViewModel()
+        let user = offset(start, metres: 2000, bearing: 90)
+        location.send(value: fix(user))
+        vm.visibleAreaChanged(area(center: user))
+        #expect(Geo.angularDistance(vm.arrow?.bearing ?? -100, 270) < 5)
+        #expect(vm.arrow?.distanceText == "2.0 km")
+    }
+
+    @Test func noArrowWhenTrackIsInView() async throws {
+        let vm = try await northSouthViewModel()
+        location.send(value: fix(start))
+        vm.visibleAreaChanged(area(center: start))
+        #expect(vm.arrow == nil)
+    }
+
+    @Test func noArrowWhenLocationUnknown() async throws {
+        let vm = try await northSouthViewModel()
+        vm.visibleAreaChanged(area(center: offset(start, metres: 2000, bearing: 90)))
+        #expect(vm.arrow == nil)
+
+        location.send(value: fix(offset(start, metres: 2000, bearing: 90)))
+        location.send(value: nil)
+        #expect(vm.arrow == nil)
+    }
+
+    @Test func noArrowWithoutTrack() {
+        let vm = makeViewModel()
+        let user = offset(start, metres: 2000, bearing: 90)
+        location.send(value: fix(user))
+        vm.visibleAreaChanged(area(center: user))
+        #expect(vm.arrow == nil)
+    }
+
+    @Test func arrowIsMeasuredFromTheRealPositionWhenViewIsElsewhere() async throws {
+        let vm = try await northSouthViewModel()
+        location.send(value: fix(offset(start, metres: 1500, bearing: 270)))
+        vm.visibleAreaChanged(area(center: offset(start, metres: 9000, bearing: 90)))
+        #expect(Geo.angularDistance(vm.arrow?.bearing ?? -100, 90) < 5)
+        #expect(vm.arrow?.distanceText == "1.5 km")
+    }
+
+    @Test func noArrowWhenAccessIsDenied() async throws {
+        let vm = try await northSouthViewModel()
+        let user = offset(start, metres: 2000, bearing: 90)
+        location.send(value: fix(user))
+        vm.visibleAreaChanged(area(center: user))
+        #expect(vm.arrow != nil)
+        authorization.send(.denied)
+        #expect(vm.arrow == nil)
+    }
+
+    @Test func sameVisibleAreaPublishesArrowOnce() async throws {
+        let vm = try await northSouthViewModel()
+        let user = offset(start, metres: 2000, bearing: 90)
+        location.send(value: fix(user))
+        var published: [OffTrackArrow?] = []
+        let subscription = vm.$arrow.dropFirst().sink { published.append($0) }
+        vm.visibleAreaChanged(area(center: user))
+        vm.visibleAreaChanged(area(center: user))
+        #expect(published.count == 1)
+        subscription.cancel()
+    }
+
+    @Test func displayedMapHeadingFollowsTheMapNotTheTarget() async throws {
+        let vm = try await northSouthViewModel()
+        #expect(vm.displayedMapHeading == 0)
+        vm.visibleAreaChanged(area(center: start, heading: 40))
+        #expect(vm.displayedMapHeading == 40)
     }
 }

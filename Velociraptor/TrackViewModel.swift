@@ -45,6 +45,9 @@ final class TrackViewModel: ObservableObject {
     private var accessDenied = false
     /// Last valid position received since the current track was loaded, kept while location is lost.
     private var lastKnownCoordinate: CLLocationCoordinate2D?
+    private var visibleArea: VisibleArea?
+    /// Nearest-position result for the current fix and track; recomputed per fix, not per frame.
+    private var cachedNearest: (fix: LocationFix, arrow: OffTrackArrow)?
 
     init(
         location: any LocationProviding<LocationFix?>,
@@ -112,7 +115,11 @@ final class TrackViewModel: ObservableObject {
 
     func userChangedCamera(center: CLLocationCoordinate2D, width: Double) {}
 
-    func visibleAreaChanged(_ area: VisibleArea) {}
+    func visibleAreaChanged(_ area: VisibleArea) {
+        visibleArea = area
+        assign(\.displayedMapHeading, area.viewport.heading)
+        updateArrow()
+    }
 
     // MARK: - Location
 
@@ -124,6 +131,7 @@ final class TrackViewModel: ObservableObject {
             if mode == .following, !accessDenied { setCenter(fix.coordinate) }
         }
         updateLocationMessage()
+        updateArrow()
     }
 
     private func authorizationChanged(_ status: CLAuthorizationStatus) {
@@ -134,6 +142,20 @@ final class TrackViewModel: ObservableObject {
         }
         if mode == .following, track != nil { setCenter(defaultCenter) }
         updateLocationMessage()
+        updateArrow()
+    }
+
+    /// Arrow toward the nearest track position, from the real fix, when no part of the track is in view.
+    private func updateArrow() {
+        guard !accessDenied, let geometry, let fix = userLocation, let visibleArea, !geometry.intersects(visibleArea) else {
+            assign(\.arrow, nil)
+            return
+        }
+        if cachedNearest?.fix != fix {
+            let nearest = geometry.nearestPosition(to: fix.coordinate)
+            cachedNearest = (fix, OffTrackArrow(bearing: nearest.bearing, distanceText: DistanceFormat.text(metres: nearest.distance)))
+        }
+        assign(\.arrow, cachedNearest?.arrow)
     }
 
     private func updateLocationMessage() {
@@ -146,10 +168,12 @@ final class TrackViewModel: ObservableObject {
     private func show(_ track: Track, _ geometry: TrackGeometry) {
         self.track = track
         self.geometry = geometry
+        cachedNearest = nil
         lastKnownCoordinate = userLocation?.coordinate
         assign(\.mode, .following)
         assign(\.viewport, Viewport(center: defaultCenter, width: Viewport.defaultWidth, heading: viewport.heading))
         updateLocationMessage()
+        updateArrow()
     }
 
     /// The user's last position since the track was loaded, else the track start (also when access is denied).
