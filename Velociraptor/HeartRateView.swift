@@ -180,12 +180,12 @@ final class HeartRateViewModel: ObservableObject {
 
 struct HeartRateView: View {
     @ObservedObject var viewModel: HeartRateViewModel
-    /// Smaller size used over the track map.
-    var compact = false
+    /// Side of the gauge; smaller over the track map.
+    var size: CGFloat = HeartRateDisplay.fullSize
 
     var body: some View {
         if let text = viewModel.heartRateText {
-            HeartRateDisplay(text: text, bpm: viewModel.heartRateBPM, showsUnit: viewModel.showsUnit, compact: compact)
+            HeartRateDisplay(text: text, bpm: viewModel.heartRateBPM, showsUnit: viewModel.showsUnit, size: size)
         }
     }
 }
@@ -194,25 +194,29 @@ struct HeartRateDisplay: View {
     let text: String
     let bpm: Int?
     let showsUnit: Bool
-    var compact = false
+    var size: CGFloat = Self.fullSize
+
+    static let fullSize: CGFloat = 320
+    private var scale: CGFloat { size / Self.fullSize }
+    private var isFullSize: Bool { size >= Self.fullSize }
 
     var body: some View {
         Group {
             if showsUnit {
                 ZStack {
-                    HeartRateGauge(bpm: bpm, scale: compact ? 0.4 : 1)
+                    HeartRateGauge(bpm: bpm, scale: max(scale, 0.4))
                     VStack(spacing: 0) {
                         valueText(text)
                         Text("bpm")
-                            .font(compact ? .caption2 : .title2)
+                            .font(size >= 200 ? .title2 : .caption)
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("heartRateUnit")
                     }
-                    .padding(compact ? 14 : 40)
+                    .padding(40 * scale)
                 }
-                .frame(maxWidth: compact ? 72 : 320, maxHeight: compact ? 72 : 320)
+                .frame(maxWidth: size, maxHeight: size)
                 .aspectRatio(1, contentMode: .fit)
-                .padding(.horizontal, compact ? 0 : nil)
+                .padding(.horizontal, isFullSize ? nil : 0)
             } else {
                 valueText(text)
             }
@@ -221,9 +225,9 @@ struct HeartRateDisplay: View {
 
     private func valueText(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: compact ? 24 : 120, weight: compact ? .regular : .thin, design: .rounded))
+            .font(.system(size: 120 * scale, weight: isFullSize ? .thin : .light, design: .rounded))
             .monospacedDigit()
-            .minimumScaleFactor(0.5)
+            .minimumScaleFactor(isFullSize ? 0.5 : 0.3)
             .lineLimit(1)
             .accessibilityIdentifier("heartRateValue")
     }

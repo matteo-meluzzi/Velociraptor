@@ -35,11 +35,11 @@ struct TrackMapView: UIViewRepresentable {
         coordinator.parent = self
         coordinator.isUpdating = true
         defer { coordinator.isUpdating = false }
-        // MapKit centres the camera inside its layout margins; symmetric margins keep that centre at the
-        // screen centre (where the projection and the user marker expect it) while lifting the legal label
-        // above the bottom bar.
-        let margin = max(insets.top, insets.bottom)
-        container.mapView.layoutMargins = UIEdgeInsets(top: margin, left: 0, bottom: margin, right: 0)
+        // MapKit centres the camera inside its layout margins, so the viewport centre (the user, when following)
+        // lands in the middle of the visible area between the panels, and the legal label stays above the bar.
+        container.mapView.layoutMargins = UIEdgeInsets(
+            top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing
+        )
         let trackChanged = coordinator.show(track)
         if trackChanged { coordinator.trackDidChange() }
         let insetsChanged = coordinator.lastInsets != insets
@@ -199,10 +199,10 @@ struct TrackMapView: UIViewRepresentable {
             )
         }
 
+        /// The camera centre (middle of the visible area), so a reported view round-trips through `apply`.
         private var currentCenterAndWidth: (CLLocationCoordinate2D, Double)? {
             guard let mapView, let width = currentWidthInMetres() else { return nil }
-            let center = mapView.convert(CGPoint(x: mapView.bounds.midX, y: mapView.bounds.midY), toCoordinateFrom: mapView)
-            return (center, width)
+            return (mapView.centerCoordinate, width)
         }
 
         private func isFingerDown(_ mapView: MKMapView) -> Bool {

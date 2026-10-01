@@ -10,7 +10,17 @@ struct ContentView : View {
 
     @State private var topPanelBottom: CGFloat = 0
     @State private var bottomBarTop: CGFloat = 0
-    @State private var screenBottom: CGFloat = 0
+    @State private var screen = ScreenMetrics()
+
+    /// Share of the screen height (from the top edge) taken by speed and heart rate over the map.
+    private static let topPanelShare: CGFloat = 0.3
+    private static let topPanelPadding: CGFloat = 6
+
+    private struct ScreenMetrics: Equatable {
+        var height: CGFloat = 0
+        var bottom: CGFloat = 0
+        var safeTop: CGFloat = 0
+    }
 
     var body: some View {
         Group {
@@ -86,19 +96,27 @@ struct ContentView : View {
         ZStack {
             TrackView(
                 viewModel: trackViewModel,
-                insets: EdgeInsets(top: topPanelBottom, leading: 0, bottom: max(0, screenBottom - bottomBarTop), trailing: 0)
+                insets: EdgeInsets(top: topPanelBottom, leading: 0, bottom: max(0, screen.bottom - bottomBarTop), trailing: 0)
             )
 
             VStack(spacing: 0) {
+                let content = max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding)
                 HStack(alignment: .center, spacing: 16) {
-                    SpeedView(viewModel: speedViewModel, compact: true)
-                        .fixedSize()
-                    HeartRateView(viewModel: heartRateViewModel, compact: true)
-                    LocationStatusView(viewModel: locationStatusViewModel)
+                    VStack(spacing: 2) {
+                        SpeedView(viewModel: speedViewModel, digitSize: min(120, content * 0.65))
+                        LocationStatusView(viewModel: locationStatusViewModel)
+                    }
+                    // Fixed-size gauge (no space reserved when hidden); the speed digits shrink to fit the rest.
+                    if heartRateViewModel.heartRateText != nil {
+                        let gauge = min(content, 150)
+                        HeartRateView(viewModel: heartRateViewModel, size: gauge)
+                            .frame(width: gauge, height: gauge)
+                    }
                 }
                 .padding(.horizontal)
-                .padding(.vertical, 6)
+                .padding(.vertical, Self.topPanelPadding)
                 .frame(maxWidth: .infinity)
+                .frame(height: max(0, Self.topPanelShare * screen.height - screen.safeTop))
                 .background(.regularMaterial, ignoresSafeAreaEdges: .top)
                 .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topPanelBottom = $0 }
 
@@ -118,10 +136,15 @@ struct ContentView : View {
                 .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { bottomBarTop = $0 }
             }
         }
-        // The map spans the whole screen, so the bottom inset is measured from the screen's bottom edge.
-        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY + $0.safeAreaInsets.bottom } action: {
-            screenBottom = $0
-        }
+        // The map spans the whole screen, so insets and the panel share are measured against the full screen.
+        .onGeometryChange(for: ScreenMetrics.self) { proxy in
+            let frame = proxy.frame(in: .global)
+            return ScreenMetrics(
+                height: frame.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom,
+                bottom: frame.maxY + proxy.safeAreaInsets.bottom,
+                safeTop: proxy.safeAreaInsets.top
+            )
+        } action: { screen = $0 }
     }
 
     private var heartRateButton: some View {

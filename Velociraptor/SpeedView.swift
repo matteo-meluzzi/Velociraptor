@@ -19,17 +19,21 @@ final class OneValueModel: ObservableObject {
 
 struct SpeedView: View {
     @ObservedObject var viewModel: OneValueModel
-    /// Smaller size used over the track map; digits stay ≥ ⅓ of the full size so they read at arm's length.
-    var compact = false
+    /// Digit size; smaller over the track map. The digits may shrink to fit the width, but never below
+    /// 40 pt (⅓ of the full size, readable at arm's length).
+    var digitSize: CGFloat = 120
 
     var body: some View {
-        HStack(alignment: .lastTextBaseline, spacing: compact ? 4 : 8) {
+        HStack(alignment: .lastTextBaseline, spacing: digitSize >= 80 ? 8 : 4) {
             Text(viewModel.displayValue)
-                .font(.system(size: compact ? 44 : 120, weight: compact ? .light : .thin, design: .rounded))
+                .font(.system(size: digitSize, weight: .thin, design: .rounded))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(min(1, 40 / digitSize))
             Text("km/h")
-                .font(compact ? .caption : .title2)
+                .font(digitSize >= 80 ? .title2 : .caption)
                 .foregroundStyle(.secondary)
+                .fixedSize()
         }
     }
 }
