@@ -22,10 +22,16 @@ struct ContentView : View {
     private static let topPanelShare: CGFloat = 0.3
     /// Share of the screen height taken by the distances band, directly under speed and heart rate (FR-006).
     private static let distanceBandShare: CGFloat = 0.15
+    /// Portrait shrinks speed, heart rate and distances to 75% of those shares, keeping their proportions (006 FR-006).
+    private static let portraitScale: CGFloat = 0.75
     private static let topPanelPadding: CGFloat = 6
     private static let topPanelSpace = "topPanel"
     private static let topPanelSpacing: CGFloat = 16
     private static let bottomBarSpacing: CGFloat = 32
+    /// Where the user sits when following, as a share of the map's height from its bottom edge (006 FR-014).
+    private static let userHeightShare: CGFloat = 0.15
+    /// Room between the user's position and the top of the buttons: the location dot and its accuracy halo.
+    private static let userClearance: CGFloat = 40
 
     private struct ScreenMetrics: Equatable {
         var width: CGFloat = 0
@@ -111,7 +117,8 @@ struct ContentView : View {
         ZStack {
             TrackView(
                 viewModel: trackViewModel,
-                insets: EdgeInsets(top: topOverlayBottom, leading: 0, bottom: max(0, screen.bottom - bottomBarTop), trailing: 0)
+                insets: EdgeInsets(top: topOverlayBottom, leading: 0, bottom: max(0, screen.bottom - bottomBarTop), trailing: 0),
+                cameraInsets: cameraInsets
             )
 
             VStack(spacing: 0) {
@@ -119,7 +126,7 @@ struct ContentView : View {
                     if screen.isLandscape { landscapeTopBar } else { portraitTopPanel }
                 }
                 .background(.regularMaterial, ignoresSafeAreaEdges: [.top, .horizontal])
-                // The map's visible area starts under the panel, so the user is centred in what can be seen (FR-012).
+                // The map's visible area starts under the panel (FR-012); the user's position within it is set by `cameraInsets`.
                 .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topOverlayBottom = $0 }
 
                 Spacer()
@@ -149,9 +156,25 @@ struct ContentView : View {
         } action: { screen = $0 }
     }
 
+    /// Puts the user 15% of the map's height above its bottom edge, so more of the way ahead shows, and raises
+    /// them clear of the buttons when those are higher (006 FR-014). MapKit centres the camera between the margins,
+    /// so the bottom margin keeps the legal label above the buttons and the top margin moves the centre down.
+    private var cameraInsets: EdgeInsets? {
+        guard topOverlayBottom > 0, bottomBarTop > topOverlayBottom, screen.bottom > bottomBarTop else { return nil }
+        let mapHeight = screen.bottom - topOverlayBottom
+        // Never above the middle of the visible map, even on a very short map (split view, large panels).
+        let user = max(
+            min(screen.bottom - Self.userHeightShare * mapHeight, bottomBarTop - Self.userClearance),
+            (topOverlayBottom + bottomBarTop) / 2
+        )
+        let bottom = screen.bottom - bottomBarTop
+        return EdgeInsets(top: max(0, 2 * user - bottomBarTop), leading: 0, bottom: bottom, trailing: 0)
+    }
+
     /// Height available for speed and heart rate inside the top 30% of the screen.
     private var instrumentsHeight: CGFloat {
-        max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding)
+        let full = max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding)
+        return screen.isLandscape ? full : full * Self.portraitScale
     }
 
     /// Speed and heart rate each get an equal share of the width; speed alone gets all of it.
@@ -174,11 +197,11 @@ struct ContentView : View {
         }
     }
 
-    /// Portrait: speed and heart rate in the top 30%, the distances band (15%) under them,
+    /// Portrait: speed and heart rate, then the distances band, at 75% of the 30% / 15% shares,
     /// pulled up to halve the empty space between the two.
     private var portraitTopPanel: some View {
-        let panelHeight = max(0, Self.topPanelShare * screen.height - screen.safeTop)
-        let bandHeight = Self.distanceBandShare * screen.height
+        let panelHeight = instrumentsHeight + 2 * Self.topPanelPadding
+        let bandHeight = Self.distanceBandShare * screen.height * Self.portraitScale
         return VStack(spacing: 0) {
             HStack(alignment: .center, spacing: Self.topPanelSpacing) { instruments }
                 .padding(.horizontal)
@@ -188,7 +211,10 @@ struct ContentView : View {
 
             DistanceBand(
                 distances: trackViewModel.distances ?? .unknown, height: bandHeight,
-                onLabelsOffset: { labelsOffset = $0 }
+                // Moving the band shifts its contents by fractions of a point (pixel rounding); ignoring those
+                // keeps the pull from chasing its own measurement ("Geometry action is cycling"). The first
+                // measurement always passes, since the offset starts at 0 (which `bandPull` waits for).
+                onLabelsOffset: { if abs($0 - labelsOffset) >= 1 { labelsOffset = $0 } }
             )
             .frame(maxWidth: .infinity)
             .frame(height: bandHeight)
@@ -206,7 +232,7 @@ struct ContentView : View {
         let gauge = heartRateViewModel.heartRateText != nil ? gaugeBottom : 0
         let instrumentsBottom = max(digitsBottom, statusBottom, gauge)
         let labelsTop = panelHeight + labelsOffset + 0.2 * DistanceBand.labelSize(forHeight: bandHeight)
-        return max(0, labelsTop - instrumentsBottom) / 2
+        return (max(0, labelsTop - instrumentsBottom) / 2).rounded()
     }
 
     /// Landscape: one bar with speed, heart rate and the distances side by side, so the map keeps most of the height.

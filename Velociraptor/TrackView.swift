@@ -4,6 +4,8 @@ import SwiftUI
 struct TrackView: View {
     @ObservedObject var viewModel: TrackViewModel
     let insets: EdgeInsets
+    /// Where the map places the user when following; see `TrackMapView.cameraInsets`.
+    var cameraInsets: EdgeInsets? = nil
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -15,6 +17,7 @@ struct TrackView: View {
                     viewport: viewModel.viewport,
                     mode: viewModel.mode,
                     insets: insets,
+                    cameraInsets: cameraInsets ?? insets,
                     onVisibleAreaChanged: { viewModel.visibleAreaChanged($0) },
                     onUserChangedCamera: { viewModel.userChangedCamera(center: $0, width: $1) },
                     onInterfaceOrientationChanged: { viewModel.interfaceOrientationChanged($0) }
@@ -37,8 +40,15 @@ struct TrackView: View {
                         height: max(0, proxy.size.height - insets.top - insets.bottom)
                     )
                     let screenAngle = arrow.bearing - viewModel.displayedMapHeading
+                    // From the camera centre: where the map draws the user while Following, so the arrow never
+                    // lands on their dot (006 FR-014). While Browsing it is wherever the user panned to.
+                    let camera = cameraInsets ?? insets
+                    let user = CGPoint(
+                        x: (camera.leading + proxy.size.width - camera.trailing) / 2,
+                        y: (camera.top + proxy.size.height - camera.bottom) / 2
+                    )
                     OffTrackArrowView(arrow: arrow, screenAngle: screenAngle)
-                        .position(ArrowPlacement.position(in: visibleRect, screenAngle: screenAngle, margin: 44))
+                        .position(ArrowPlacement.position(in: visibleRect, screenAngle: screenAngle, margin: 44, from: user))
                 }
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -134,17 +144,32 @@ private struct OffTrackArrowView: View {
 }
 
 enum ArrowPlacement {
-    /// Where a ray from the centre of `visibleRect` (inset by `margin`) at `screenAngle`
-    /// (degrees, 0 = up, clockwise) meets the inset rectangle's border.
-    static func position(in visibleRect: CGRect, screenAngle: Double, margin: CGFloat = 32) -> CGPoint {
+    /// How close to the user the arrow may sit before it moves aside, so it doesn't cover their dot.
+    static let userClearance: CGFloat = 64
+
+    /// Where a ray from `origin` (default: the centre of `visibleRect`; kept inside the inset rectangle) at
+    /// `screenAngle` (degrees, 0 = up, clockwise) meets the border of `visibleRect` inset by `margin`.
+    /// When that point is within `userClearance` of `origin` (the track is behind a user drawn low on the map),
+    /// the arrow sits `userClearance` from `origin` along the ray turned upwards: above the dot for straight behind,
+    /// beside it for sideways. That keeps it continuous as the angle changes, with no flip across the dot.
+    static func position(in visibleRect: CGRect, screenAngle: Double, margin: CGFloat = 32, from origin: CGPoint? = nil) -> CGPoint {
         let inner = visibleRect.insetBy(dx: margin, dy: margin)
-        let center = CGPoint(x: inner.midX, y: inner.midY)
+        let start = origin.map {
+            CGPoint(x: min(max($0.x, inner.minX), inner.maxX), y: min(max($0.y, inner.minY), inner.maxY))
+        } ?? CGPoint(x: inner.midX, y: inner.midY)
         let radians = screenAngle * .pi / 180
         let dx = sin(radians), dy = -cos(radians)
         var t = CGFloat.infinity
-        if abs(dx) > 1e-9 { t = min(t, (dx > 0 ? inner.maxX - center.x : inner.minX - center.x) / dx) }
-        if abs(dy) > 1e-9 { t = min(t, (dy > 0 ? inner.maxY - center.y : inner.minY - center.y) / dy) }
-        if !t.isFinite { return center }
-        return CGPoint(x: center.x + t * dx, y: center.y + t * dy)
+        if abs(dx) > 1e-9 { t = min(t, (dx > 0 ? inner.maxX - start.x : inner.minX - start.x) / dx) }
+        if abs(dy) > 1e-9 { t = min(t, (dy > 0 ? inner.maxY - start.y : inner.minY - start.y) / dy) }
+        if !t.isFinite { return start }
+        var point = CGPoint(x: start.x + t * dx, y: start.y + t * dy)
+        if let origin, hypot(point.x - origin.x, point.y - origin.y) < userClearance {
+            point = CGPoint(
+                x: min(max(origin.x + userClearance * dx, inner.minX), inner.maxX),
+                y: min(max(origin.y - userClearance * abs(dy), inner.minY), inner.maxY)
+            )
+        }
+        return point
     }
 }

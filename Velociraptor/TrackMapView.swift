@@ -12,6 +12,8 @@ struct TrackMapView: UIViewRepresentable {
     let viewport: Viewport
     let mode: TrackViewMode
     let insets: EdgeInsets
+    /// Margins MapKit centres the camera in: they place the user (the viewport centre when following) on screen.
+    let cameraInsets: EdgeInsets
     let onVisibleAreaChanged: (VisibleArea) -> Void
     let onUserChangedCamera: (CLLocationCoordinate2D, Double) -> Void
     let onInterfaceOrientationChanged: (UIInterfaceOrientation) -> Void
@@ -41,14 +43,15 @@ struct TrackMapView: UIViewRepresentable {
         coordinator.isUpdating = true
         defer { coordinator.isUpdating = false }
         // MapKit centres the camera inside its layout margins, so the viewport centre (the user, when following)
-        // lands in the middle of the visible area between the panels, and the legal label stays above the bar.
+        // lands where `cameraInsets` put it, and the legal label stays above the buttons.
         container.mapView.layoutMargins = UIEdgeInsets(
-            top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing
+            top: cameraInsets.top, left: cameraInsets.leading, bottom: cameraInsets.bottom, right: cameraInsets.trailing
         )
         let trackChanged = coordinator.show(track)
         if trackChanged { coordinator.trackDidChange() }
-        let insetsChanged = coordinator.lastInsets != insets
+        let insetsChanged = coordinator.lastInsets != insets || coordinator.lastCameraInsets != cameraInsets
         coordinator.lastInsets = insets
+        coordinator.lastCameraInsets = cameraInsets
         coordinator.apply(viewport)
         if trackChanged || insetsChanged { coordinator.refreshVisibleArea() }
         coordinator.checkInterfaceOrientation()
@@ -61,6 +64,7 @@ struct TrackMapView: UIViewRepresentable {
         /// True while SwiftUI is updating the view; callbacks are then deferred so the model isn't changed mid-update.
         var isUpdating = false
         var lastInsets: EdgeInsets?
+        var lastCameraInsets: EdgeInsets?
 
         private var shownTrack: Track?
         private var casing: MKMultiPolyline?
@@ -262,7 +266,7 @@ struct TrackMapView: UIViewRepresentable {
             )
         }
 
-        /// The camera centre (middle of the visible area), so a reported view round-trips through `apply`.
+        /// The camera centre (where `cameraInsets` put the user), so a reported view round-trips through `apply`.
         private var currentCenterAndWidth: (CLLocationCoordinate2D, Double)? {
             guard let mapView, let width = currentWidthInMetres() else { return nil }
             return (mapView.centerCoordinate, width)
