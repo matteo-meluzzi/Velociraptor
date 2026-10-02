@@ -9,6 +9,12 @@ struct ContentView : View {
     @ObservedObject var trackViewModel: TrackViewModel
 
     @State private var topOverlayBottom: CGFloat = 0
+    /// Measured in the top panel's own coordinates, so none of them depends on how far the band is pulled up.
+    @State private var speedBottom: CGFloat = 0
+    @State private var statusBottom: CGFloat = 0
+    @State private var gaugeBottom: CGFloat = 0
+    /// Where the distance labels start inside the band.
+    @State private var labelsOffset: CGFloat = 0
     @State private var bottomBarTop: CGFloat = 0
     @State private var screen = ScreenMetrics()
 
@@ -17,13 +23,17 @@ struct ContentView : View {
     /// Share of the screen height taken by the distances band, directly under speed and heart rate (FR-006).
     private static let distanceBandShare: CGFloat = 0.15
     private static let topPanelPadding: CGFloat = 6
+    private static let topPanelSpace = "topPanel"
     private static let topPanelSpacing: CGFloat = 16
     private static let bottomBarSpacing: CGFloat = 32
 
     private struct ScreenMetrics: Equatable {
+        var width: CGFloat = 0
         var height: CGFloat = 0
         var bottom: CGFloat = 0
         var safeTop: CGFloat = 0
+
+        var isLandscape: Bool { width > height }
     }
 
     var body: some View {
@@ -95,7 +105,8 @@ struct ContentView : View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Full-screen track map with compact speed and heart rate on top (FR-009), and the distances under them.
+    /// Full-screen track map with compact speed, heart rate and distances on top (FR-009, 006 FR-006),
+    /// and the buttons floating over the map, which runs to the bottom edge.
     private var trackLayout: some View {
         ZStack {
             TrackView(
@@ -104,49 +115,25 @@ struct ContentView : View {
             )
 
             VStack(spacing: 0) {
-                let content = max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding)
-                let showsHeartRate = heartRateViewModel.heartRateText != nil
-                HStack(alignment: .center, spacing: Self.topPanelSpacing) {
-                    // Speed and heart rate each get half the width; speed alone gets all of it.
-                    VStack(spacing: 2) {
-                        SpeedView(viewModel: speedViewModel, digitSize: min(120, content * 0.65))
-                        LocationStatusView(viewModel: locationStatusViewModel)
-                    }
-                    .frame(minWidth: 0, maxWidth: .infinity)
-                    if showsHeartRate {
-                        // The gauge keeps its aspect ratio and shrinks to fit its half.
-                        HeartRateView(viewModel: heartRateViewModel, size: content)
-                            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: content)
-                    }
+                Group {
+                    if screen.isLandscape { landscapeTopBar } else { portraitTopPanel }
                 }
-                .padding(.horizontal)
-                .padding(.vertical, Self.topPanelPadding)
-                .frame(maxWidth: .infinity)
-                .frame(height: max(0, Self.topPanelShare * screen.height - screen.safeTop))
-                .background(.regularMaterial, ignoresSafeAreaEdges: .top)
-
-                let bandHeight = Self.distanceBandShare * screen.height
-                DistanceBand(distances: trackViewModel.distances ?? .unknown, height: bandHeight)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: bandHeight)
-                    .background(.regularMaterial)
-                    // The map's visible area starts under the band, so the user is centred in what can be seen (FR-012).
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topOverlayBottom = $0 }
+                .background(.regularMaterial, ignoresSafeAreaEdges: [.top, .horizontal])
+                // The map's visible area starts under the panel, so the user is centred in what can be seen (FR-012).
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topOverlayBottom = $0 }
 
                 Spacer()
 
                 // Large, well-spaced targets: easy to hit while moving.
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: Self.bottomBarSpacing) { importButton; heartRateButton; closeTrackButton }
+                    HStack(spacing: Self.bottomBarSpacing) { floatingButtons }
                         .labelStyle(.titleOnly)
-                    HStack(spacing: Self.bottomBarSpacing) { importButton; heartRateButton; closeTrackButton }
+                    HStack(spacing: Self.bottomBarSpacing) { floatingButtons }
                         .labelStyle(.iconOnly)
                 }
                 .controlSize(.regular)
                 .padding(.horizontal)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(.regularMaterial, ignoresSafeAreaEdges: .bottom)
+                .padding(.bottom, 8)
                 .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { bottomBarTop = $0 }
             }
         }
@@ -154,11 +141,93 @@ struct ContentView : View {
         .onGeometryChange(for: ScreenMetrics.self) { proxy in
             let frame = proxy.frame(in: .global)
             return ScreenMetrics(
+                width: frame.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing,
                 height: frame.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom,
                 bottom: frame.maxY + proxy.safeAreaInsets.bottom,
                 safeTop: proxy.safeAreaInsets.top
             )
         } action: { screen = $0 }
+    }
+
+    /// Height available for speed and heart rate inside the top 30% of the screen.
+    private var instrumentsHeight: CGFloat {
+        max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding)
+    }
+
+    /// Speed and heart rate each get an equal share of the width; speed alone gets all of it.
+    @ViewBuilder private var instruments: some View {
+        let content = instrumentsHeight
+        VStack(spacing: 2) {
+            SpeedView(viewModel: speedViewModel, digitSize: min(120, content * 0.65))
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.topPanelSpace)).maxY } action: { speedBottom = $0 }
+            LocationStatusView(viewModel: locationStatusViewModel)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height > 0 ? proxy.frame(in: .named(Self.topPanelSpace)).maxY : 0
+                } action: { statusBottom = $0 }
+        }
+        .frame(minWidth: 0, maxWidth: .infinity)
+        if heartRateViewModel.heartRateText != nil {
+            // The gauge keeps its aspect ratio and shrinks to fit its share.
+            HeartRateView(viewModel: heartRateViewModel, size: content)
+                .frame(minWidth: 0, maxWidth: .infinity, maxHeight: content)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.topPanelSpace)).maxY } action: { gaugeBottom = $0 }
+        }
+    }
+
+    /// Portrait: speed and heart rate in the top 30%, the distances band (15%) under them,
+    /// pulled up to halve the empty space between the two.
+    private var portraitTopPanel: some View {
+        let panelHeight = max(0, Self.topPanelShare * screen.height - screen.safeTop)
+        let bandHeight = Self.distanceBandShare * screen.height
+        return VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: Self.topPanelSpacing) { instruments }
+                .padding(.horizontal)
+                .padding(.vertical, Self.topPanelPadding)
+                .frame(maxWidth: .infinity)
+                .frame(height: panelHeight)
+
+            DistanceBand(
+                distances: trackViewModel.distances ?? .unknown, height: bandHeight,
+                onLabelsOffset: { labelsOffset = $0 }
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: bandHeight)
+            .padding(.top, -bandPull(panelHeight: panelHeight, bandHeight: bandHeight))
+        }
+        .coordinateSpace(.named(Self.topPanelSpace))
+    }
+
+    /// Half the visible gap between the instruments and the distance labels; 0 until everything is measured.
+    /// Frames are corrected for SF Rounded metrics: the digits' frame reaches about 0.22 of the size below the
+    /// digits (descender), and a label's frame starts about 0.2 of its size above the capitals.
+    private func bandPull(panelHeight: CGFloat, bandHeight: CGFloat) -> CGFloat {
+        guard speedBottom > 0, labelsOffset > 0 else { return 0 }
+        let digitsBottom = speedBottom - 0.22 * min(120, instrumentsHeight * 0.65)
+        let gauge = heartRateViewModel.heartRateText != nil ? gaugeBottom : 0
+        let instrumentsBottom = max(digitsBottom, statusBottom, gauge)
+        let labelsTop = panelHeight + labelsOffset + 0.2 * DistanceBand.labelSize(forHeight: bandHeight)
+        return max(0, labelsTop - instrumentsBottom) / 2
+    }
+
+    /// Landscape: one bar with speed, heart rate and the distances side by side, so the map keeps most of the height.
+    private var landscapeTopBar: some View {
+        HStack(alignment: .center, spacing: Self.topPanelSpacing) {
+            HStack(alignment: .center, spacing: Self.topPanelSpacing) { instruments }
+                .frame(minWidth: 0, maxWidth: .infinity)
+            DistanceBand(distances: trackViewModel.distances ?? .unknown, height: instrumentsHeight)
+                .frame(minWidth: 0, maxWidth: .infinity)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, Self.topPanelPadding)
+        .frame(maxWidth: .infinity)
+        .frame(height: max(0, Self.topPanelShare * screen.height - screen.safeTop))
+    }
+
+    /// The bottom buttons float over the map, each on its own material so it stays readable.
+    @ViewBuilder private var floatingButtons: some View {
+        Group { importButton; heartRateButton; closeTrackButton }
+            .buttonBorderShape(.roundedRectangle(radius: 8))
+            .background(.regularMaterial, in: .rect(cornerRadius: 8))
     }
 
     private var heartRateButton: some View {

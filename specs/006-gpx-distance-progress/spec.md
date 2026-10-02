@@ -13,6 +13,8 @@
 ### Session 2026-10-01
 
 - Q (from the user, after review round 1): What should the distances use when the user is away from the track? → A: The closest point of the track to the user (FR-004d). Where the track passes nearly as close more than once, continuity with the previous progress chooses between the passes.
+- Q (from the user, 2026-10-02, after testing on a device): "Left" was cut off ("65...."). → A: Make the distance font smaller and not bold. The values must shrink to fit rather than be cut off (FR-008).
+- Q (from the user, 2026-10-02, after testing on a device): the map is too small. → A: (1) In landscape, speed, heart rate and the distances share one top bar (FR-006a). (2) The bottom buttons float over the map, which runs to the bottom edge of the screen (updates feature 005 FR-009). (3) In portrait, the empty space between speed/heart rate and the distances is halved (FR-006).
 - Decision (after review round 2): FR-004 states the required behaviour and its limits. The exact selection algorithm and its tuning are left to the plan and are verified against the US2 scenarios and SC-003, because a rule written into the spec kept failing edge cases (doubled-back legs inside the radius, slow walkers below the Moving threshold).
 
 ## Definitions
@@ -114,13 +116,15 @@ As a user on a track that passes the same place more than once, I want the dista
 
 **Display**
 
-- **FR-006**: The distance band MUST sit directly under the speed and heart rate panel (which takes the top 30% of the screen height, feature 005 FR-009) and take 15% of the screen height, i.e., the band spans from 30% to 45% of the full screen height measured from the top edge of the screen (status bar and camera area included in the measurement, as in feature 005 FR-009).
+- **FR-006**: The distance band MUST sit directly under the speed and heart rate panel (which takes the top 30% of the screen height, feature 005 FR-009) and take 15% of the screen height, i.e., the band spans from 30% to 45% of the full screen height measured from the top edge of the screen (status bar and camera area included in the measurement, as in feature 005 FR-009). In portrait, the band is then moved up so that the visible empty space between the speed digits (or heart rate gauge) and the distance labels is half what it would be otherwise; the map gains that height.
+- **FR-006a**: In landscape, the distances MUST sit in the same top bar as speed and heart rate (the top 30% of the screen height): speed and heart rate share one half of the width, and the two distances the other half. There is no separate band.
+- **FR-006b**: The "Import GPX track", heart rate monitor and close-track buttons MUST float over the map, each on its own background so it stays readable. The map MUST run to the bottom edge of the screen. The map's visible area for centring ends at the top of the buttons.
 - **FR-007**: The distance band MUST show two values side by side, each with a short label: distance travelled on the left (label "Done"), distance remaining on the right (label "Left").
-- **FR-008**: The distance digits MUST be smaller than the speed digits and as large as fits in their half of the band together with the label, and MUST be readable at arm's length: digit height at least 25% of the band height on an iPhone 16-class screen. The unit ("km") and labels may be smaller than the digits.
+- **FR-008**: The distance digits MUST be in a regular (not bold) weight, smaller than the speed digits, and readable at arm's length: digit height about 25% of the band height on an iPhone 16-class screen. A value MUST never be cut off. If it doesn't fit its half of the band, the number and unit shrink together. The unit ("km") and labels may be smaller than the digits.
 - **FR-009**: Distances MUST be formatted in kilometres with two decimals below 100 km (e.g., "0.00 km", "3.47 km", "99.99 km") and one decimal from 100 km (e.g., "128.1 km"), matching common running and cycling apps. Every value up to 999.9 km MUST fit in its half of the band without being cut off.
 - **FR-010**: When the user's location is unknown and no progress position is established, both values MUST show "—" in place of a number. When the location becomes unknown after a progress position is established, the values for that position MUST stay shown.
 - **FR-011**: The distance band MUST be shown only while a track is loaded, and MUST NOT change the speed or heart rate values or behaviour.
-- **FR-012**: The map's visible area MUST start below the distance band, so the user stays in the middle of what can actually be seen (this updates feature 005 FR-010: "between the speed/heart rate panel and the button bar" becomes "between the distance band and the button bar").
+- **FR-012**: The map's visible area MUST start below the distance band (portrait) or the top bar (landscape), so the user stays in the middle of what can actually be seen (this updates feature 005 FR-010: "between the speed/heart rate panel and the button bar" becomes "between the distance band and the button bar").
 - **FR-013**: The app MUST remember the progress position together with the last loaded track (feature 005 FR-007), and restore it as established when the track is restored on relaunch, together with whether it has been more than 200 m (or half the track length for tracks shorter than 400 m) before the end (see Finished). The saved position MUST be no more than 10 seconds old while the user is moving along the track. Importing a new track or closing the track MUST discard it.
 
 ### Key Entities

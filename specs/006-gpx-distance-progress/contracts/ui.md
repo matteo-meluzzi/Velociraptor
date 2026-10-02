@@ -4,8 +4,11 @@
 
 - The band appears only in `ContentView.trackLayout`. It sits directly under the speed/heart rate panel, with height `0.15 × screen.height` (full screen height, the same measure as the 30% panel) and a `regularMaterial` background.
 - Two equal halves: left "Done", right "Left". Each is a label above the number, followed by a smaller "km".
-- Digits: rounded, semibold, monospaced, `0.45 × band` pt, `minimumScaleFactor(0.85)`, `lineLimit(1)`. "km" is set at half the digit size. The label is `max(11, 0.14 × band)` pt, secondary colour.
-- The map's top inset is the band's bottom edge, so the user is centred in what is visible.
+- Digits: rounded, regular weight, monospaced, `0.36 × band` pt. "km" is set at half the digit size. Number and unit form one `Text` with `lineLimit(1)` and `minimumScaleFactor(0.5)`, so they shrink together and are never cut off (device feedback 2026-10-02). The label is `max(11, 0.14 × band)` pt, secondary colour.
+- Portrait: the band is pulled up (negative top padding) by half the visible gap between the instruments (speed digits, location status line, gauge) and the "Done" letters. The pull is computed from measurements in the panel's and band's own coordinate spaces, which don't depend on the pull, so it updates whenever the instruments change (for example a monitor connects). The measurement corrects frames for font metrics: digits bottom = speed frame bottom − 0.22 × digit size, labels top = label frame top + 0.2 × label size. Panel and band share one `regularMaterial` background.
+- Landscape: one bar (top 30%) with `HStack { HStack { speed; heart rate }; DistanceBand(height: bar content height) }`, each half of the width. The background extends into the top and side safe areas.
+- The bottom buttons float over the map, each with its own `regularMaterial` rounded background. The bar has no background, and the map runs to the bottom edge.
+- The map's top inset is the bottom of the top overlay, and its bottom inset is the top of the buttons, so the user is centred in what is visible.
 - Accessibility identifiers: `distanceBand`, `distanceTravelled`, `distanceRemaining`. VoiceOver labels: "Done, 3.47 kilometres" and "Left, 1.53 kilometres"; with no value, "Done, unknown".
 
 ## TrackViewModel guarantees

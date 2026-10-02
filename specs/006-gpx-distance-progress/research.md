@@ -74,7 +74,7 @@
 - 50,000 edges × a handful of multiply-adds is about 1 ms in Release.
 - A guard test enforces < 16 ms (best of 5) on a Debug simulator build.
 - Measured on the 50,000-point track: 10.4 ms with chunks visited in file order, 0.46 ms with nearest-box-first order.
-- Worst case (code review): a user off the track at the centre of a 5 km-radius, 50,000-point loop, where every edge is almost equally near. It took 49 ms in Debug at first. Scanning through buffers and building passes during the scan brought it to about 23 ms in Debug, and it passes the 16 ms guard in a Release build. The Debug guard for this case is 50 ms.
+- Worst case (code review): a user off the track at the centre of a 5 km-radius, 50,000-point loop, where every edge is almost equally near. It took 49 ms in Debug at first. Scanning through buffers and building passes during the scan brought it to about 23 ms in Debug, and it passes the 16 ms guard in a Release build. The Debug guard for this case is 100 ms, because it flaked at 50 ms under parallel test load. It is a regression guard; the frame budget is checked in Release.
 - Passes are split only after the distance has risen by more than 5 m (`passSplitRise`), so jitter along a leg doesn't create many tiny passes. Turnaround legs still separate, because the distance rises well over 5 m around the tip.
 - The metre frame is centred on the track's first point, not on the user (R2 step 1 describes the user's frame for clarity). Over a track hundreds of km north–south, the single `cos(latitude)` skews east–west sideways distances by a few percent at the far end. Along-track distances are unaffected (haversine).
 
@@ -102,6 +102,11 @@
 - On an iPhone 16 in portrait the band is 128 pt, so the digits are a 58 pt font against the speed's 120 pt.
 - "999.9 km" measures about 165 pt against a half-width of about 180 pt.
 - `topPanelBottom` (the map's top inset) is measured from the band's bottom edge instead of the panel's (FR-012).
+
+**Revision (2026-10-02, device feedback)**: on a real phone, "65.xx km" was cut to "65....". The number and "km" were separate `Text`s, so the number truncated on its own instead of scaling down. Now:
+- digits are regular weight at `0.36·band`, so the cap height is about 0.25 of the band;
+- shrinking only happens for values that would not fit otherwise;
+- number and unit are one `Text` with `minimumScaleFactor(0.5)`.
 
 ## R7 — When values show "—" (FR-010)
 
