@@ -5,6 +5,8 @@ struct DistanceBand: View {
     let distances: TrackDistances
     /// The band's height; type sizes follow it so the digits fill the band at any screen size.
     let height: CGFloat
+    /// Side by side (portrait band) or stacked, "Done" above "Left" (landscape side panel).
+    var axis: Axis = .horizontal
     /// Reports where the labels start inside the band, so the layout can close up the space above them.
     var onLabelsOffset: ((CGFloat) -> Void)?
 
@@ -13,11 +15,21 @@ struct DistanceBand: View {
     static func labelSize(forHeight height: CGFloat) -> CGFloat { max(11, height * 0.14) }
 
     var body: some View {
-        HStack(spacing: 0) {
-            value(label: "Done", text: distances.done, identifier: "distanceTravelled")
-                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.space)).minY } action: { onLabelsOffset?($0) }
-            Divider().padding(.vertical, height * 0.15)
-            value(label: "Left", text: distances.left, identifier: "distanceRemaining")
+        Group {
+            if axis == .horizontal {
+                HStack(spacing: 0) {
+                    value(label: "Done", text: distances.done, identifier: "distanceTravelled")
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.space)).minY } action: { onLabelsOffset?($0) }
+                    Divider().padding(.vertical, height * 0.15)
+                    value(label: "Left", text: distances.left, identifier: "distanceRemaining")
+                }
+            } else {
+                VStack(spacing: height * 0.15) {
+                    value(label: "Done", text: distances.done, identifier: "distanceTravelled")
+                    Divider()
+                    value(label: "Left", text: distances.left, identifier: "distanceRemaining")
+                }
+            }
         }
         .padding(.horizontal)
         // Fill the band, so the labels' offset reflects their centring in it.

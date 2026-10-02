@@ -8,7 +8,11 @@ struct ContentView : View {
     @ObservedObject var heartRateViewModel: HeartRateViewModel
     @ObservedObject var trackViewModel: TrackViewModel
 
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var topOverlayBottom: CGFloat = 0
+    /// Landscape side panels: the right edge of the left one and the left edge of the right one (global).
+    @State private var leftPanelEdge: CGFloat = 0
+    @State private var rightPanelEdge: CGFloat = 0
     /// Measured in the top panel's own coordinates, so none of them depends on how far the band is pulled up.
     @State private var speedBottom: CGFloat = 0
     @State private var statusBottom: CGFloat = 0
@@ -22,12 +26,19 @@ struct ContentView : View {
     private static let topPanelShare: CGFloat = 0.3
     /// Share of the screen height taken by the distances band, directly under speed and heart rate (FR-006).
     private static let distanceBandShare: CGFloat = 0.15
+    /// Width of each landscape side panel (speed and heart rate on the left, distances on the right), as a share
+    /// of the screen width (006 FR-006a).
+    private static let landscapeSideShare: CGFloat = 0.2
+    /// Size of each distance row in the right panel, relative to the left panel's speed and gauge.
+    private static let landscapeDistanceScale: CGFloat = 0.75
     /// Portrait shrinks speed, heart rate and distances to 75% of those shares, keeping their proportions (006 FR-006).
     private static let portraitScale: CGFloat = 0.75
     private static let topPanelPadding: CGFloat = 6
     private static let topPanelSpace = "topPanel"
     private static let topPanelSpacing: CGFloat = 16
     private static let bottomBarSpacing: CGFloat = 32
+    /// Heart rate gauge beside the speed on the landscape speed screen: fits the height above the buttons.
+    private static let landscapeGaugeSize: CGFloat = 240
     /// Where the user sits when following, as a share of the map's height from its bottom edge (006 FR-014).
     private static let userHeightShare: CGFloat = 0.15
     /// Room between the user's position and the top of the buttons: the location dot and its accuracy halo.
@@ -90,15 +101,28 @@ struct ContentView : View {
         }
     }
 
-    /// The speed screen as in feature 004, plus the import button.
+    /// The speed screen as in feature 004, plus the import button. In landscape, speed and heart rate sit side by
+    /// side instead of stacked, sized to the shorter height.
     private var speedLayout: some View {
         VStack(spacing: 8) {
             Spacer()
-            HeartRateView(viewModel: heartRateViewModel)
-            SpeedView(viewModel: speedViewModel)
-                .fixedSize()
-                .layoutPriority(1)
-            LocationStatusView(viewModel: locationStatusViewModel)
+            if verticalSizeClass == .compact {
+                HStack(alignment: .center, spacing: 32) {
+                    VStack(spacing: 8) {
+                        SpeedView(viewModel: speedViewModel)
+                            .fixedSize()
+                        LocationStatusView(viewModel: locationStatusViewModel)
+                    }
+                    .layoutPriority(1)
+                    HeartRateView(viewModel: heartRateViewModel, size: Self.landscapeGaugeSize)
+                }
+            } else {
+                HeartRateView(viewModel: heartRateViewModel)
+                SpeedView(viewModel: speedViewModel)
+                    .fixedSize()
+                    .layoutPriority(1)
+                LocationStatusView(viewModel: locationStatusViewModel)
+            }
             Spacer()
             ViewThatFits(in: .horizontal) {
                 HStack { heartRateButton; importButton }
@@ -111,38 +135,13 @@ struct ContentView : View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Full-screen track map with compact speed, heart rate and distances on top (FR-009, 006 FR-006),
-    /// and the buttons floating over the map, which runs to the bottom edge.
+    /// Full-screen track map with the instruments over it: on top in portrait (FR-009, 006 FR-006), on the sides in
+    /// landscape (006 FR-006a). The buttons float over the map, which runs to the bottom edge.
     private var trackLayout: some View {
         ZStack {
-            TrackView(
-                viewModel: trackViewModel,
-                insets: EdgeInsets(top: topOverlayBottom, leading: 0, bottom: max(0, screen.bottom - bottomBarTop), trailing: 0),
-                cameraInsets: cameraInsets
-            )
+            TrackView(viewModel: trackViewModel, insets: mapInsets, cameraInsets: cameraInsets)
 
-            VStack(spacing: 0) {
-                Group {
-                    if screen.isLandscape { landscapeTopBar } else { portraitTopPanel }
-                }
-                .background(.regularMaterial, ignoresSafeAreaEdges: [.top, .horizontal])
-                // The map's visible area starts under the panel (FR-012); the user's position within it is set by `cameraInsets`.
-                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topOverlayBottom = $0 }
-
-                Spacer()
-
-                // Large, well-spaced targets: easy to hit while moving.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: Self.bottomBarSpacing) { floatingButtons }
-                        .labelStyle(.titleOnly)
-                    HStack(spacing: Self.bottomBarSpacing) { floatingButtons }
-                        .labelStyle(.iconOnly)
-                }
-                .controlSize(.regular)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { bottomBarTop = $0 }
-            }
+            if screen.isLandscape { landscapeOverlay } else { portraitOverlay }
         }
         // The map spans the whole screen, so insets and the panel share are measured against the full screen.
         .onGeometryChange(for: ScreenMetrics.self) { proxy in
@@ -156,25 +155,87 @@ struct ContentView : View {
         } action: { screen = $0 }
     }
 
+    private var portraitOverlay: some View {
+        VStack(spacing: 0) {
+            portraitTopPanel
+                .background(.regularMaterial, ignoresSafeAreaEdges: [.top, .horizontal])
+                // The map's visible area starts under the panel (FR-012); the user's position within it is set by `cameraInsets`.
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topOverlayBottom = $0 }
+            Spacer()
+            buttons
+        }
+    }
+
+    /// Speed and heart rate on the left, the distances on the right, the map between them at full height.
+    private var landscapeOverlay: some View {
+        let sideWidth = Self.landscapeSideShare * screen.width
+        return HStack(spacing: 0) {
+            VStack(spacing: Self.topPanelSpacing) { instruments }
+                .padding(Self.topPanelPadding)
+                .frame(width: sideWidth)
+                .frame(maxHeight: .infinity)
+                .background(.regularMaterial, ignoresSafeAreaEdges: [.leading, .vertical])
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxX } action: { leftPanelEdge = $0 }
+            VStack(spacing: 0) {
+                Spacer()
+                buttons
+            }
+            // Fills the space between the panels, so the panels sit against the screen's sides.
+            .frame(maxWidth: .infinity)
+            DistanceBand(distances: trackViewModel.distances ?? .unknown, height: instrumentsHeight * Self.landscapeDistanceScale, axis: .vertical)
+                .frame(width: sideWidth)
+                .frame(maxHeight: .infinity)
+                .background(.regularMaterial, ignoresSafeAreaEdges: [.trailing, .vertical])
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minX } action: { rightPanelEdge = $0 }
+        }
+    }
+
+    /// Large, well-spaced icon buttons, the same in both orientations: easy to hit while moving.
+    private var buttons: some View {
+        HStack(spacing: Self.bottomBarSpacing) { floatingButtons }
+            .labelStyle(.iconOnly)
+            .controlSize(.regular)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { bottomBarTop = $0 }
+    }
+
+    /// The part of the map not covered by the instruments or the buttons (FR-012).
+    private var mapInsets: EdgeInsets {
+        let bottom = max(0, screen.bottom - bottomBarTop)
+        guard screen.isLandscape else { return EdgeInsets(top: topOverlayBottom, leading: 0, bottom: bottom, trailing: 0) }
+        // Until both side panels are measured (first turn to landscape), leave the sides open.
+        guard rightPanelEdge > leftPanelEdge else { return EdgeInsets(top: 0, leading: 0, bottom: bottom, trailing: 0) }
+        return EdgeInsets(top: 0, leading: leftPanelEdge, bottom: bottom, trailing: max(0, screen.width - rightPanelEdge))
+    }
+
     /// Puts the user 15% of the map's height above its bottom edge, so more of the way ahead shows, and raises
     /// them clear of the buttons when those are higher (006 FR-014). MapKit centres the camera between the margins,
     /// so the bottom margin keeps the legal label above the buttons and the top margin moves the centre down.
     private var cameraInsets: EdgeInsets? {
-        guard topOverlayBottom > 0, bottomBarTop > topOverlayBottom, screen.bottom > bottomBarTop else { return nil }
-        let mapHeight = screen.bottom - topOverlayBottom
+        let visible = mapInsets
+        let mapTop = visible.top
+        guard screen.isLandscape || mapTop > 0, bottomBarTop > mapTop, screen.bottom > bottomBarTop else { return nil }
+        let mapHeight = screen.bottom - mapTop
         // Never above the middle of the visible map, even on a very short map (split view, large panels).
         let user = max(
             min(screen.bottom - Self.userHeightShare * mapHeight, bottomBarTop - Self.userClearance),
-            (topOverlayBottom + bottomBarTop) / 2
+            (mapTop + bottomBarTop) / 2
         )
         let bottom = screen.bottom - bottomBarTop
-        return EdgeInsets(top: max(0, 2 * user - bottomBarTop), leading: 0, bottom: bottom, trailing: 0)
+        // Sideways the camera stays centred between the landscape side panels.
+        return EdgeInsets(top: max(0, 2 * user - bottomBarTop), leading: visible.leading, bottom: bottom, trailing: visible.trailing)
     }
 
-    /// Height available for speed and heart rate inside the top 30% of the screen.
+    /// Height for speed and for the heart rate gauge: inside the top 30% of the screen in portrait, half a side panel in landscape.
     private var instrumentsHeight: CGFloat {
-        let full = max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding)
-        return screen.isLandscape ? full : full * Self.portraitScale
+        if screen.isLandscape {
+            // Speed above the gauge in a side panel: each gets about half the height, within the panel's width.
+            let width = Self.landscapeSideShare * screen.width - 2 * Self.topPanelPadding
+            let half = (screen.bottom - Self.topPanelSpacing) / 2 - Self.topPanelPadding
+            return max(0, min(width, half))
+        }
+        return max(0, Self.topPanelShare * screen.height - screen.safeTop - 2 * Self.topPanelPadding) * Self.portraitScale
     }
 
     /// Speed and heart rate each get an equal share of the width; speed alone gets all of it.
@@ -233,20 +294,6 @@ struct ContentView : View {
         let instrumentsBottom = max(digitsBottom, statusBottom, gauge)
         let labelsTop = panelHeight + labelsOffset + 0.2 * DistanceBand.labelSize(forHeight: bandHeight)
         return (max(0, labelsTop - instrumentsBottom) / 2).rounded()
-    }
-
-    /// Landscape: one bar with speed, heart rate and the distances side by side, so the map keeps most of the height.
-    private var landscapeTopBar: some View {
-        HStack(alignment: .center, spacing: Self.topPanelSpacing) {
-            HStack(alignment: .center, spacing: Self.topPanelSpacing) { instruments }
-                .frame(minWidth: 0, maxWidth: .infinity)
-            DistanceBand(distances: trackViewModel.distances ?? .unknown, height: instrumentsHeight)
-                .frame(minWidth: 0, maxWidth: .infinity)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, Self.topPanelPadding)
-        .frame(maxWidth: .infinity)
-        .frame(height: max(0, Self.topPanelShare * screen.height - screen.safeTop))
     }
 
     /// The bottom buttons float over the map, each on its own material so it stays readable.

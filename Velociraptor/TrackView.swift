@@ -35,8 +35,8 @@ struct TrackView: View {
             if let arrow = viewModel.arrow {
                 GeometryReader { proxy in
                     let visibleRect = CGRect(
-                        x: 0, y: insets.top,
-                        width: proxy.size.width,
+                        x: insets.leading, y: insets.top,
+                        width: max(0, proxy.size.width - insets.leading - insets.trailing),
                         height: max(0, proxy.size.height - insets.top - insets.bottom)
                     )
                     let screenAngle = arrow.bearing - viewModel.displayedMapHeading
@@ -60,13 +60,16 @@ struct TrackView: View {
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("recentreButton")
                 .padding(.bottom, insets.bottom + 16)
+                .padding(.leading, insets.leading)
+                .padding(.trailing, insets.trailing)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .ignoresSafeArea()
             }
             if let message = viewModel.locationMessage {
                 locationMessage(message)
                     .padding(.top, insets.top + 8)
-                    .padding(.horizontal)
+                    .padding(.leading, insets.leading + 16)
+                    .padding(.trailing, insets.trailing + 16)
                     .ignoresSafeArea()
             }
         }
