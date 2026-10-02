@@ -415,4 +415,130 @@ struct TrackViewModelTests {
         #expect(vm.mode == .following)
         #expect(vm.viewport.width == 1000)
     }
+
+    // MARK: D1–D12 – distances along the track (feature 006)
+
+    /// The same store as `makeViewModel()`, with its own location provider (a relaunched app has no fix yet).
+    private func relaunchedViewModel(location: MockLocationProvider<LocationFix?> = MockLocationProvider(initialValue: nil)) async -> TrackViewModel {
+        let vm = TrackViewModel(
+            location: location, heading: heading, authorization: authorization,
+            store: FileTrackStore(directory: directory)
+        )
+        await vm.loadStoredTrack()
+        return vm
+    }
+
+    private func north(_ metres: Double) -> CLLocationCoordinate2D { offset(start, metres: metres, bearing: 0) }
+
+    private func kilometres(_ text: String?) -> Double { text.flatMap(Double.init) ?? .nan }
+
+    private var otherGPX: String {
+        gpx11(#"<trk><name>Other</name><trkseg><trkpt lat="1" lon="1"/><trkpt lat="1.01" lon="1"/></trkseg></trk>"#)
+    }
+
+    @Test func d1NoDistancesWithoutTrack() {
+        let vm = makeViewModel()
+        location.send(value: fix(start))
+        #expect(vm.distances == nil)
+    }
+
+    @Test func d2UnknownUntilTheFirstFix() async throws {
+        let vm = try await loadedViewModel()
+        #expect(vm.distances == .unknown)
+    }
+
+    @Test func d3d4FixesShowDoneAndLeftAlongTheTrack() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start))
+        #expect(vm.distances == TrackDistances(done: "0.00", left: "1.11"))
+
+        location.send(value: fix(north(555)))
+        let done = kilometres(vm.distances?.done), left = kilometres(vm.distances?.left)
+        #expect(abs(done - 0.55) <= 0.01)
+        #expect(abs(done + left - 1.11) <= 0.011)
+    }
+
+    @Test func d5aLostLocationKeepsEstablishedValues() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(north(300)))
+        let shown = vm.distances
+        location.send(value: nil)
+        #expect(vm.distances == shown)
+        #expect(shown != .unknown)
+    }
+
+    @Test func d5bLostLocationBeforeProgressIsEstablishedShowsUnknown() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(offset(start, metres: 200, bearing: 90)))
+        #expect(vm.distances?.done == "0.00")
+        location.send(value: nil)
+        #expect(vm.distances == .unknown)
+    }
+
+    @Test func d6ClosingRemovesDistancesAndProgress() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(north(300)))
+        vm.closeTrack()
+        #expect(vm.distances == nil)
+        #expect(FileTrackStore(directory: directory).loadProgress() == nil)
+    }
+
+    @Test func d7ProgressComesBackAfterRelaunch() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start))
+        location.send(value: fix(north(500)))
+        let shown = vm.distances
+
+        let relaunched = await relaunchedViewModel()
+        #expect(relaunched.distances == shown)
+    }
+
+    @Test func d8NewImportStartsOverAndForgetsOldProgress() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(north(500)))
+        await vm.importFile(at: try file(otherGPX))
+        // The known fix is far north of the new track: its closest point (the finish) is shown, but not established.
+        #expect(vm.distances == TrackDistances(done: "1.11", left: "0.00"))
+
+        let relaunched = await relaunchedViewModel()
+        #expect(relaunched.track?.name == "Other")
+        #expect(relaunched.distances == .unknown)
+    }
+
+    @Test func d9DeniedAccessShowsRestoredValues() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(north(500)))
+        let shown = vm.distances
+        authorization.send(.denied)
+
+        let relaunched = await relaunchedViewModel()
+        #expect(relaunched.distances == shown)
+    }
+
+    @Test func d10KnownFixCountsAsSoonAsATrackIsImported() async throws {
+        location.send(value: fix(start))
+        let vm = try await loadedViewModel()
+        #expect(vm.distances == TrackDistances(done: "0.00", left: "1.11"))
+    }
+
+    @Test func d11BrowsingStillFollowsTheRealFix() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(start))
+        vm.userChangedCamera(center: offset(start, metres: 3000, bearing: 90), width: 3000)
+        location.send(value: fix(north(500)))
+        #expect(abs(kilometres(vm.distances?.done) - 0.5) <= 0.01)
+    }
+
+    @Test func d12FixesDuringAnImportDoNotLeaveOldProgressBehind() async throws {
+        let vm = try await loadedViewModel()
+        location.send(value: fix(north(500)))
+        let importing = Task { await vm.importFile(at: try file(otherGPX)) }
+        await Task.yield()
+        location.send(value: fix(north(600)))
+        try await importing.value
+
+        let relaunched = await relaunchedViewModel()
+        #expect(relaunched.track?.name == "Other")
+        #expect(relaunched.distances == .unknown)
+    }
 }

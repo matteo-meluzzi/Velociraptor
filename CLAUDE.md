@@ -33,5 +33,5 @@ Note: unit tests use the newer Swift Testing framework (not XCTest), so test fun
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at `specs/005-gpx-track-follow/plan.md`.
+at `specs/006-gpx-distance-progress/plan.md`.
 <!-- SPECKIT END -->

@@ -43,4 +43,51 @@ struct FileTrackStoreTests {
         try store.save(other)
         #expect(store.load() == other)
     }
+
+    // MARK: Progress (FR-013)
+
+    private let progress = ProgressState(travelled: 1234.5, armed: true, finished: false)
+
+    @Test func savedProgressLoadsBack() throws {
+        let store = FileTrackStore(directory: makeTempDirectory())
+        try store.saveProgress(progress)
+        #expect(store.loadProgress() == progress)
+    }
+
+    @Test func loadProgressWithoutFileIsNil() {
+        #expect(FileTrackStore(directory: makeTempDirectory()).loadProgress() == nil)
+    }
+
+    @Test func savingATrackKeepsProgress() throws {
+        let store = FileTrackStore(directory: makeTempDirectory())
+        try store.saveProgress(progress)
+        try store.save(track)
+        #expect(store.loadProgress() == progress)
+    }
+
+    @Test func clearProgressKeepsTrack() throws {
+        let store = FileTrackStore(directory: makeTempDirectory())
+        try store.save(track)
+        try store.saveProgress(progress)
+        store.clearProgress()
+        #expect(store.loadProgress() == nil)
+        #expect(store.load() == track)
+    }
+
+    @Test func clearRemovesTrackAndProgress() throws {
+        let store = FileTrackStore(directory: makeTempDirectory())
+        try store.save(track)
+        try store.saveProgress(progress)
+        store.clear()
+        #expect(store.load() == nil)
+        #expect(store.loadProgress() == nil)
+    }
+
+    @Test func unreadableProgressLoadsNilAndIsRemoved() throws {
+        let directory = makeTempDirectory()
+        let file = directory.appendingPathComponent("CurrentTrackProgress.json")
+        try Data("not json".utf8).write(to: file)
+        #expect(FileTrackStore(directory: directory).loadProgress() == nil)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
 }

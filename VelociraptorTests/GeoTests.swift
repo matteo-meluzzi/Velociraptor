@@ -34,6 +34,14 @@ struct GeoTests {
         #expect(DistanceFormat.text(metres: metres) == expected)
     }
 
+    @Test(arguments: [
+        (0.0, "0.00"), (3_474, "3.47"), (99_994, "99.99"), (99_996, "100.0"), (128_060, "128.1"), (-3, "0.00"),
+        (.nan, "0.00"),
+    ])
+    func progressText(metres: Double, expected: String) {
+        #expect(DistanceFormat.progress(metres: metres) == expected)
+    }
+
     private func area(heading: Double, insets: EdgeInsets = EdgeInsets()) -> VisibleArea {
         VisibleArea(
             mapSize: CGSize(width: 390, height: 844),

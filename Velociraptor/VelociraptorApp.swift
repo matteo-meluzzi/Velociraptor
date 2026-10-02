@@ -8,12 +8,14 @@ struct ContentView : View {
     @ObservedObject var heartRateViewModel: HeartRateViewModel
     @ObservedObject var trackViewModel: TrackViewModel
 
-    @State private var topPanelBottom: CGFloat = 0
+    @State private var topOverlayBottom: CGFloat = 0
     @State private var bottomBarTop: CGFloat = 0
     @State private var screen = ScreenMetrics()
 
     /// Share of the screen height (from the top edge) taken by speed and heart rate over the map.
     private static let topPanelShare: CGFloat = 0.3
+    /// Share of the screen height taken by the distances band, directly under speed and heart rate (FR-006).
+    private static let distanceBandShare: CGFloat = 0.15
     private static let topPanelPadding: CGFloat = 6
     private static let topPanelSpacing: CGFloat = 16
     private static let bottomBarSpacing: CGFloat = 32
@@ -93,12 +95,12 @@ struct ContentView : View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Full-screen track map with compact speed and heart rate on top (FR-009).
+    /// Full-screen track map with compact speed and heart rate on top (FR-009), and the distances under them.
     private var trackLayout: some View {
         ZStack {
             TrackView(
                 viewModel: trackViewModel,
-                insets: EdgeInsets(top: topPanelBottom, leading: 0, bottom: max(0, screen.bottom - bottomBarTop), trailing: 0)
+                insets: EdgeInsets(top: topOverlayBottom, leading: 0, bottom: max(0, screen.bottom - bottomBarTop), trailing: 0)
             )
 
             VStack(spacing: 0) {
@@ -122,7 +124,14 @@ struct ContentView : View {
                 .frame(maxWidth: .infinity)
                 .frame(height: max(0, Self.topPanelShare * screen.height - screen.safeTop))
                 .background(.regularMaterial, ignoresSafeAreaEdges: .top)
-                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topPanelBottom = $0 }
+
+                let bandHeight = Self.distanceBandShare * screen.height
+                DistanceBand(distances: trackViewModel.distances ?? .unknown, height: bandHeight)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: bandHeight)
+                    .background(.regularMaterial)
+                    // The map's visible area starts under the band, so the user is centred in what can be seen (FR-012).
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { topOverlayBottom = $0 }
 
                 Spacer()
 

@@ -42,6 +42,13 @@ enum DistanceFormat {
         if rounded < 1000 { return "\(Int(rounded)) m" }
         return String(format: "%.1f km", metres / 1000)
     }
+
+    /// Kilometres without the unit: "3.47" below 100 km, "128.1" from 100 km.
+    static func progress(metres: Double) -> String {
+        let kilometres = metres.isFinite ? max(0, metres) / 1000 : 0
+        if (kilometres * 100).rounded() / 100 < 100 { return String(format: "%.2f", kilometres) }
+        return String(format: "%.1f", kilometres)
+    }
 }
 
 struct Viewport: Equatable {

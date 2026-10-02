@@ -11,6 +11,15 @@ enum LocationMessage: Equatable {
     case unknown, denied
 }
 
+/// "Done" and "Left" along the track, in kilometres without the unit; "—" while unknown.
+struct TrackDistances: Equatable {
+    static let unknownText = "—"
+    static let unknown = TrackDistances(done: unknownText, left: unknownText)
+
+    let done: String
+    let left: String
+}
+
 struct OffTrackArrow: Equatable {
     /// Degrees from north, from the user's real position to the nearest track position.
     let bearing: Double
@@ -32,6 +41,8 @@ final class TrackViewModel: ObservableObject {
     @Published private(set) var userLocation: LocationFix?
     @Published private(set) var arrow: OffTrackArrow?
     @Published private(set) var locationMessage: LocationMessage?
+    /// `nil` while no track is loaded.
+    @Published private(set) var distances: TrackDistances?
     @Published var isImporterPresented = false
     @Published var alertMessage: String?
 
@@ -51,6 +62,12 @@ final class TrackViewModel: ObservableObject {
     private var cachedNearest: (fix: LocationFix, arrow: OffTrackArrow)?
     private var orientation = OrientationController()
     private var latestCompass: CompassHeading?
+    private var progress: TrackProgressTracker?
+    private var lastSavedProgress: ProgressState?
+    /// While a new track is being read, the old track's progress must not be saved over the cleared file.
+    private var isImporting = false
+    /// Saving every fix would be needless writes; this keeps the saved value seconds old at walking pace (FR-013).
+    private static let progressSaveDistance = 5.0
 
     init(
         location: any LocationProviding<LocationFix?>,
@@ -80,8 +97,13 @@ final class TrackViewModel: ObservableObject {
 
     func loadStoredTrack() async {
         let store = self.store
-        let loaded = await Task.detached { store.load().map { ($0, TrackGeometry(track: $0)) } }.value
-        if let (track, geometry) = loaded { show(track, geometry) }
+        let loaded = await Task.detached { () -> (Track, TrackGeometry, TrackRoute, ProgressState?)? in
+            guard let track = store.load() else { return nil }
+            return (track, TrackGeometry(track: track), TrackRoute(track: track), store.loadProgress())
+        }.value
+        if let (track, geometry, route, progress) = loaded {
+            show(track, geometry, route, restoring: progress, isImport: false)
+        }
     }
 
     func importButtonTapped() {
@@ -91,19 +113,23 @@ final class TrackViewModel: ObservableObject {
     func importFile(at url: URL) async {
         let fileName = url.lastPathComponent
         let store = self.store
-        let result = await Task.detached { () -> Result<(Track, TrackGeometry), GPXImportError> in
+        isImporting = true
+        let result = await Task.detached { () -> Result<(Track, TrackGeometry, TrackRoute), GPXImportError> in
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             guard let data = try? Data(contentsOf: url) else { return .failure(.unreadable) }
             return GPXParser.parse(data, fileName: fileName).map { track in
                 // Best effort: if saving fails the track still shows, it just won't come back after a relaunch.
+                // The old track's progress goes first (saves are paused while importing), so a crash before `show` can't restore it onto this track.
+                store.clearProgress()
                 try? store.save(track)
-                return (track, TrackGeometry(track: track))
+                return (track, TrackGeometry(track: track), TrackRoute(track: track))
             }
         }.value
+        isImporting = false
         switch result {
-        case .success(let (track, geometry)):
-            show(track, geometry)
+        case .success(let (track, geometry, route)):
+            show(track, geometry, route, restoring: nil, isImport: true)
         case .failure:
             alertMessage = "Couldn't load \(fileName)"
         }
@@ -116,7 +142,10 @@ final class TrackViewModel: ObservableObject {
     func closeTrack() {
         track = nil
         geometry = nil
+        progress = nil
+        lastSavedProgress = nil
         assign(\.arrow, nil)
+        assign(\.distances, nil)
         store.clear()
     }
 
@@ -154,6 +183,7 @@ final class TrackViewModel: ObservableObject {
         updateOrientation()
         updateLocationMessage()
         updateArrow()
+        updateProgress(with: accessDenied ? nil : fix?.coordinate)
     }
 
     private func authorizationChanged(_ status: CLAuthorizationStatus) {
@@ -189,6 +219,42 @@ final class TrackViewModel: ObservableObject {
         assign(\.arrow, cachedNearest?.arrow)
     }
 
+    /// Done/Left from the real fix (also while Browsing). Without a fix, established progress keeps its values (FR-010).
+    private func updateProgress(with coordinate: CLLocationCoordinate2D?) {
+        guard var tracker = progress else {
+            assign(\.distances, nil)
+            return
+        }
+        if let coordinate {
+            let travelled = tracker.update(coordinate)
+            progress = tracker
+            assign(\.distances, Self.distances(travelled: travelled, length: tracker.route.length))
+            saveProgressIfNeeded(tracker.state)
+        } else if let state = tracker.state {
+            assign(\.distances, Self.distances(travelled: state.travelled, length: tracker.route.length))
+        } else {
+            assign(\.distances, .unknown)
+        }
+    }
+
+    private static func distances(travelled: Double, length: Double) -> TrackDistances {
+        TrackDistances(
+            done: DistanceFormat.progress(metres: travelled),
+            left: DistanceFormat.progress(metres: length - travelled)
+        )
+    }
+
+    private func saveProgressIfNeeded(_ state: ProgressState?) {
+        guard !isImporting, let state, state != lastSavedProgress else { return }
+        if let saved = lastSavedProgress, saved.armed == state.armed, saved.finished == state.finished,
+           abs(saved.travelled - state.travelled) < Self.progressSaveDistance {
+            return
+        }
+        // Best effort, like the track itself.
+        try? store.saveProgress(state)
+        lastSavedProgress = state
+    }
+
     private func updateLocationMessage() {
         let message: LocationMessage? = accessDenied ? .denied : (userLocation == nil ? .unknown : nil)
         assign(\.locationMessage, message)
@@ -196,15 +262,21 @@ final class TrackViewModel: ObservableObject {
 
     // MARK: - View state
 
-    private func show(_ track: Track, _ geometry: TrackGeometry) {
+    private func show(_ track: Track, _ geometry: TrackGeometry, _ route: TrackRoute, restoring restored: ProgressState?, isImport: Bool) {
         self.track = track
         self.geometry = geometry
+        // On the main actor, after any save by the old tracker and before the new one saves (no stale progress).
+        if isImport { store.clearProgress() }
+        progress = TrackProgressTracker(route: route, restoring: restored)
+        lastSavedProgress = restored
         cachedNearest = nil
         lastKnownCoordinate = userLocation?.coordinate
         assign(\.mode, .following)
         assign(\.viewport, Viewport(center: defaultCenter, width: Viewport.defaultWidth, heading: viewport.heading))
         updateLocationMessage()
         updateArrow()
+        // A fix that is already known counts at once, so a user standing still sees values (US1-AS1).
+        updateProgress(with: accessDenied ? nil : userLocation?.coordinate)
     }
 
     /// The user's last position since the track was loaded, else the track start (also when access is denied).
